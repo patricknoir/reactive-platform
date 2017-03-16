@@ -1,4 +1,4 @@
-package com.lottomart.platform
+package org.patricknoir.platform
 
 import cats.Monoid
 import cats.syntax.all._

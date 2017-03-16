@@ -1,4 +1,4 @@
-package com.lottomart.platform.runtime.actors
+package org.patricknoir.platform.runtime.actors
 
 import akka.actor.{ActorLogging, Props}
 import akka.persistence.{AtLeastOnceDelivery, PersistentActor}

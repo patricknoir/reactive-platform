@@ -1,7 +1,7 @@
 name := "reactive-platform"
 
 version := "1.0.0-SNAPSHOT"
-organization := "com.lottomart.platform"
+organization := "org.patricknoir.platform"
 scalaVersion := "2.12.1"
 
 val Versions = new {

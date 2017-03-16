@@ -1,4 +1,4 @@
-package com.lottomart
+package org.patricknoir
 
 import cats.data.State
 import com.lottomart.platform.protocol.{Command, Event, Request, Response}

@@ -1,4 +1,4 @@
-package com.lottomart.platform.runtime
+package org.patricknoir.platform.runtime
 
 import java.net.InetAddress
 
