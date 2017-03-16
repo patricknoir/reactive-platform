@@ -8,24 +8,11 @@ import com.lottomart.platform.protocol._
 
 import scala.concurrent.Future
 
-case class SFService[M, In, Out](id: String, func: In => Future[State[M, Out]])
-
-case class Service[-In, +Out](id: String, f: PartialFunction[In, Future[Out]])
-case class StatefulService[M, -In, Out](id: String, func: PartialFunction[In, Future[State[M, Out]]])
-
 case class ServiceURL(boundedContextId: String, componentId: String, serviceId: String)
 
 trait Component {
   val id: String
   val version: Version
-}
-
-trait Model[T] {
-  def apply(event: Event): Model[T]
-}
-
-object Model {
-  def lift[T](t: T): Model[T] = ???
 }
 
 trait ProcessorDescriptor
@@ -38,12 +25,12 @@ case class KeyShardedProcessDescriptor(
 ) extends ProcessorDescriptor
 
 case class Processor[W] (
-                          override val id: String,
-                          override val version: Version,
-                          descriptor: ProcessorDescriptor,
-                          model: W,
-                          commandModifiers: Set[StatefulService[W, Command, Seq[Event]]],
-                          eventModifiers: Set[StatefulService[W, Event, Seq[Event]]]
+  override val id: String,
+  override val version: Version,
+  descriptor: ProcessorDescriptor,
+  model: W,
+  commandModifiers: Set[Cmd[W]],
+  eventModifiers: Set[Evt[W]]
 ) extends Component
 
 trait ViewDescriptor
@@ -54,12 +41,12 @@ case class KeyShardedViewDescriptor(
 )
 
 case class View[R](
-                    override val id: String,
-                    override val version: Version,
-                    descriptor: ViewDescriptor,
-                    model: Model[R],
-                    modifiers: Set[StatefulService[Model[R], Event, Seq[Event]]],
-                    queries: Set[StatefulService[Model[R], Request, Response]]
+  override val id: String,
+  override val version: Version,
+  descriptor: ViewDescriptor,
+  model: R,
+  modifiers: Set[Evt[R]],
+  queries: Set[Ask[R]]
 ) extends Component
 
 case class Version(
