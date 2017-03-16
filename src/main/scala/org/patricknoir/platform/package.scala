@@ -1,7 +1,7 @@
 package org.patricknoir
 
 import cats.data.State
-import com.lottomart.platform.protocol.{Command, Event, Request, Response}
+import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 
 import scala.concurrent.Future
 

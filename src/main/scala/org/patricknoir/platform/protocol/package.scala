@@ -1,4 +1,4 @@
-package com.lottomart.platform
+package org.patricknoir.platform
 
 /**
   * Created by patrick on 14/03/2017.

@@ -4,7 +4,7 @@ import cats.Monoid
 import cats.syntax.all._
 import cats._
 import cats.data._
-import com.lottomart.platform.protocol._
+import org.patricknoir.platform.protocol._
 
 import scala.concurrent.Future
 

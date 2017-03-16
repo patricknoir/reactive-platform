@@ -6,12 +6,11 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.util.Timeout
 import cats.data.State
-import com.lottomart.platform._
-import com.lottomart.platform.protocol.{Command, Event}
-import com.lottomart.platform.runtime.Util.IncrementCounterCmd
-import com.lottomart.platform.runtime.actors.ProcessorActor
-import com.typesafe.config.ConfigFactory
+import org.patricknoir.platform.protocol.{Command, Event}
 import com.typesafe.scalalogging.LazyLogging
+import org.patricknoir.platform._
+import org.patricknoir.platform.runtime.Util.{DecrementCounterCmd, IncrementCounterCmd}
+import org.patricknoir.platform.runtime.actors.ProcessorActor
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration.Duration
@@ -50,6 +49,7 @@ object Boot extends App with LazyLogging {
   clusters("counterProcessor") ! IncrementCounterCmd("Counter1", 1)
   clusters("counterProcessor") ! IncrementCounterCmd("Counter1", 1)
   clusters("counterProcessor") ! IncrementCounterCmd("Counter2", 1)
+  clusters("counterProcessor") ! DecrementCounterCmd("Counter2", 1)
 
   Await.ready(system.whenTerminated, Duration.Inf)
   logger.info(s"Node ${InetAddress.getLocalHost.getHostName} terminated")
@@ -101,16 +101,16 @@ object Util {
   case class CounterDecrementedEvt(id: String, step: Int) extends Event
 
   object command {
-    def apply[Cmd <: Command, S](id: String)(modifier: (S, Cmd) => (S, Seq[Event])) = {
+    def apply[C <: Command, S](id: String)(modifier: (S, C) => (S, Seq[Event])) = {
       val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
-        case cmd: Cmd => Future.successful(State(init => modifier(init, cmd)))
+        case cmd: C => Future.successful(State(init => modifier(init, cmd)))
       }
       StatefulService[S, Command, Seq[Event]](id, fc)
     }
 
-    def async[Cmd <: Command, S](id: String)(modifier: (S, Cmd) => Future[(S, Seq[Event])])(implicit ec: ExecutionContext, timeout: Timeout) = {
+    def async[C <: Command, S](id: String)(modifier: (S, C) => Future[(S, Seq[Event])])(implicit ec: ExecutionContext, timeout: Timeout) = {
       val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
-        case cmd: Cmd =>
+        case cmd: C =>
           Future(State { init =>
             Await.result(modifier(init, cmd), timeout.duration) //can I avoid this blocking?
           })

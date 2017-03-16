@@ -3,9 +3,9 @@ package org.patricknoir.platform.runtime.actors
 import akka.actor.{ActorLogging, Props}
 import akka.persistence.{AtLeastOnceDelivery, PersistentActor}
 import cats.data.State
-import com.lottomart.platform.{Processor, StatefulService}
-import com.lottomart.platform.protocol.{Command, Event}
-import com.lottomart.platform.runtime.actors.ProcessorActor.CompleteCommand
+import org.patricknoir.platform.protocol.{Command, Event}
+import org.patricknoir.platform._
+import org.patricknoir.platform.runtime.actors.ProcessorActor.CompleteCommand
 
 import scala.collection.immutable.Queue
 import scala.concurrent.Future
