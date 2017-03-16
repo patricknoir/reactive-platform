@@ -57,6 +57,7 @@ class ProcessorActor[T](processor: Processor[T]) extends PersistentActor with Ac
           model = newModel
           fireEvents(events)
           //confirmDelivery(cc.hashCode)
+          //TODO: handle commands in completedCommandSet waiting for previous cmd
         }
       )
     }
