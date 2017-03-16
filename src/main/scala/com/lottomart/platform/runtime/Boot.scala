@@ -56,10 +56,10 @@ object Boot extends App with LazyLogging {
 
 object Util {
 
-  val incrementSFService = StatefullService[Int, Command, Seq[Event]]("incrementCmd", {
+  val incrementSFService = StatefulService[Int, Command, Seq[Event]]("incrementCmd", {
     case cmd: IncrementCounterCmd =>
       val response: State[Int, Seq[Event]] = State.modify[Int](previous => previous + cmd.step).transform((s, _) => (s, Seq(CounterIncrementedEvt(cmd.id, cmd.step))))
-      Future.successful(response)
+      Future.successful[State[Int, Seq[Event]]](response)
   })
 
   val counterProcessor = Processor[Int](

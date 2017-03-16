@@ -3,7 +3,7 @@ package com.lottomart.platform.runtime.actors
 import akka.actor.{ActorLogging, Props}
 import akka.persistence.{AtLeastOnceDelivery, PersistentActor}
 import cats.data.State
-import com.lottomart.platform.{Processor, StatefullService}
+import com.lottomart.platform.{Processor, StatefulService}
 import com.lottomart.platform.protocol.{Command, Event}
 import com.lottomart.platform.runtime.actors.ProcessorActor.CompleteCommand
 
@@ -24,10 +24,9 @@ class ProcessorActor[T](processor: Processor[T]) extends PersistentActor with Ac
   var pendingOperations: Queue[Command] = Queue.empty
   var completedCommandsSet: Set[CompleteCommand[T]] = Set.empty
 
-  def findServiceForCommand(cmd: Command): Option[StatefullService[T, Command, Seq[Event]]] =
-    processor.commandModifiers.find { sf =>
-      PartialFunction(sf.func).isDefinedAt(cmd)
-    }
+  def findServiceForCommand(cmd: Command): Option[StatefulService[T, Command, Seq[Event]]] =
+    processor.commandModifiers.find(_.func.isDefinedAt(cmd))
+
 
   override def receiveCommand = {
     case cmd: Command =>

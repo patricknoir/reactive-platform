@@ -10,8 +10,8 @@ import scala.concurrent.Future
 
 case class SFService[M, In, Out](id: String, func: In => Future[State[M, Out]])
 
-case class Service[In, Out](id: String, f: PartialFunction[In, Future[Out]])
-case class StatefullService[M, In, Out](id: String, func: PartialFunction[In, Future[State[M, Out]]])
+case class Service[-In, +Out](id: String, f: PartialFunction[In, Future[Out]])
+case class StatefulService[M, -In, Out](id: String, func: PartialFunction[In, Future[State[M, Out]]])
 
 case class ServiceURL(boundedContextId: String, componentId: String, serviceId: String)
 
@@ -38,12 +38,12 @@ case class KeyShardedProcessDescriptor(
 ) extends ProcessorDescriptor
 
 case class Processor[W] (
-  override val id: String,
-  override val version: Version,
-  descriptor: ProcessorDescriptor,
-  model: W,
-  commandModifiers: Set[StatefullService[W, Command, Seq[Event]]],
-  eventModifiers: Set[StatefullService[W, Event, Seq[Event]]]
+                          override val id: String,
+                          override val version: Version,
+                          descriptor: ProcessorDescriptor,
+                          model: W,
+                          commandModifiers: Set[StatefulService[W, Command, Seq[Event]]],
+                          eventModifiers: Set[StatefulService[W, Event, Seq[Event]]]
 ) extends Component
 
 trait ViewDescriptor
@@ -54,12 +54,12 @@ case class KeyShardedViewDescriptor(
 )
 
 case class View[R](
-  override val id: String,
-  override val version: Version,
-  descriptor: ViewDescriptor,
-  model: Model[R],
-  modifiers: Set[StatefullService[Model[R], Event, Seq[Event]]],
-  queries: Set[StatefullService[Model[R], Request, Response]]
+                    override val id: String,
+                    override val version: Version,
+                    descriptor: ViewDescriptor,
+                    model: Model[R],
+                    modifiers: Set[StatefulService[Model[R], Event, Seq[Event]]],
+                    queries: Set[StatefulService[Model[R], Request, Response]]
 ) extends Component
 
 case class Version(
