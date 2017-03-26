@@ -8,9 +8,7 @@ import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSeri
 import org.patricknoir.kafka.reactive.server.{ReactiveRoute, ReactiveService, ReactiveSystem}
 import org.patricknoir.kafka.reactive.server.streams.{ReactiveKafkaSink, ReactiveKafkaSource}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
-import org.patricknoir.platform.runtime.Boot.system
 import org.patricknoir.platform.runtime.{Platform, ProcessorServer}
-import org.patricknoir.platform.runtime.Util._
 import org.patricknoir.platform.runtime.actors.ProcessorActor
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -68,30 +66,30 @@ package object dsl {
     }
   }
 
-  object ProcessorExample {
-    import io.circe.generic.auto._
-
-    val counterProcessor = processor[Int]("counterProcessor", 0)(KeyShardedProcessDescriptor(
-      commandKeyExtractor = {
-        case cmd@IncrementCounterCmd(id, _) => (id, cmd)
-        case cmd@DecrementCounterCmd(id, _) => (id, cmd)
-      },
-      eventKeyExtractor = PartialFunction.empty,
-      queryKeyExtractor = {
-        case req@CounterValueReq(id) => (id, req)
-      },
-      dependencies = Set.empty,
-      hashFunction = _.hashCode,
-      shardSpaceSize = 100
-    ))(
-      command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
-        (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-      },
-      command("decrementCmd") { (counter: Int, dc: DecrementCounterCmd) =>
-        (counter - dc.step, Seq(CounterDecrementedEvt(dc.id, dc.step)))
-      }
-    )
-  }
+//  object ProcessorExample {
+//    import io.circe.generic.auto._
+//
+//    val counterProcessor = processor[Int]("counterProcessor", 0)(KeyShardedProcessDescriptor(
+//      commandKeyExtractor = {
+//        case cmd@IncrementCounterCmd(id, _) => (id, cmd)
+//        case cmd@DecrementCounterCmd(id, _) => (id, cmd)
+//      },
+//      eventKeyExtractor = PartialFunction.empty,
+//      queryKeyExtractor = {
+//        case req@CounterValueReq(id) => (id, req)
+//      },
+//      dependencies = Set.empty,
+//      hashFunction = _.hashCode,
+//      shardSpaceSize = 100
+//    ))(
+//      command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
+//        (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+//      },
+//      command("decrementCmd") { (counter: Int, dc: DecrementCounterCmd) =>
+//        (counter - dc.step, Seq(CounterDecrementedEvt(dc.id, dc.step)))
+//      }
+//    )
+//  }
 
 
   case class PlatformConfig(

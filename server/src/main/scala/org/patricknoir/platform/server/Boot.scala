@@ -8,51 +8,19 @@ import akka.util.Timeout
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 import com.typesafe.scalalogging.LazyLogging
 import org.patricknoir.platform._
-import org.patricknoir.platform.runtime.Util.{CounterValueReq, CounterValueResp, DecrementCounterCmd, IncrementCounterCmd}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import akka.pattern.ask
 import akka.stream.ActorMaterializer
-import io.circe.generic.auto._
+import org.patricknoir.platform.Util._
 
 /**
   * Created by patrick on 15/03/2017.
   */
 object Boot extends App with LazyLogging {
 
-  val bc = Util.bc
-
-  implicit val system = ActorSystem("platform")
-  implicit val materializer = ActorMaterializer()
-
-  import system.dispatcher
-
-  implicit val config = PlatformConfig.default
-  implicit val timeout = Timeout(5 seconds)
-
-  val runtime = platform(bc)
-
-  val server = runtime.processorServers("counterProcessor").server
-
-  server ! IncrementCounterCmd("Counter1", 1)
-  server ! IncrementCounterCmd("Counter1", 1)
-  server ! IncrementCounterCmd("Counter2", 1)
-  server ! DecrementCounterCmd("Counter2", 1)
-
-  val statusCounter1: Future[CounterValueResp] = (server ? CounterValueReq("Counter1")).mapTo[CounterValueResp]
-  val statusCounter2: Future[CounterValueResp] = (server ? CounterValueReq("Counter2")).mapTo[CounterValueResp]
-
-  Future.sequence(Set(statusCounter1, statusCounter2)).onComplete(println)
-
-  runtime.run()
-
-  Await.ready(system.whenTerminated, Duration.Inf)
-  logger.info(s"Node ${InetAddress.getLocalHost.getHostName} terminated")
-}
-
-object Util {
-
+  import io.circe.generic.auto._
 
   val counterProcessor = Processor[Int](
     id = "counterProcessor",
@@ -99,12 +67,32 @@ object Util {
     components = Set(counterProcessor)
   )
 
-  case class IncrementCounterCmd(id: String, step: Int) extends Command
-  case class CounterIncrementedEvt(id: String, step: Int) extends Event
-  case class DecrementCounterCmd(id: String, step: Int) extends Command
-  case class CounterDecrementedEvt(id: String, step: Int) extends Event
+  import Util._
 
-  case class CounterValueReq(id: String) extends Request
-  case class CounterValueResp(id: String, value: Int) extends Response
+  implicit val system = ActorSystem("platform")
+  implicit val materializer = ActorMaterializer()
 
+  import system.dispatcher
+
+  implicit val config = PlatformConfig.default
+  implicit val timeout = Timeout(5 seconds)
+
+  val runtime = platform(bc)
+
+  val server = runtime.processorServers("counterProcessor").server
+
+  server ! IncrementCounterCmd("Counter1", 1)
+  server ! IncrementCounterCmd("Counter1", 1)
+  server ! IncrementCounterCmd("Counter2", 1)
+  server ! DecrementCounterCmd("Counter2", 1)
+
+  val statusCounter1: Future[CounterValueResp] = (server ? CounterValueReq("Counter1")).mapTo[CounterValueResp]
+  val statusCounter2: Future[CounterValueResp] = (server ? CounterValueReq("Counter2")).mapTo[CounterValueResp]
+
+  Future.sequence(Set(statusCounter1, statusCounter2)).onComplete(println)
+
+  runtime.run()
+
+  Await.ready(system.whenTerminated, Duration.Inf)
+  logger.info(s"Node ${InetAddress.getLocalHost.getHostName} terminated")
 }

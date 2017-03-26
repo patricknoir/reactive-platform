@@ -1,3 +1,5 @@
+import sbt.Keys.organization
+
 name := "reactive-platform"
 
 version := "1.0.0-SNAPSHOT"
@@ -11,7 +13,7 @@ val Versions = new {
   val Akka = "2.4.17"
 }
 
-libraryDependencies ++= Seq(
+val commonDependencies = Seq(
   "io.circe" %% "circe-core" % Versions.Circe,
   "io.circe" %% "circe-generic" % Versions.Circe,
   "io.circe" %% "circe-parser" % Versions.Circe,
@@ -28,3 +30,27 @@ libraryDependencies ++= Seq(
   "org.iq80.leveldb"            % "leveldb"          % "0.7",
   "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8"
 )
+
+
+
+val root = project
+            .in(file("."))
+            .settings(libraryDependencies ++= commonDependencies)
+
+val server = project.in(file("server/"))
+              .settings(
+                version := "1.0.0-SNAPSHOT",
+                organization := "org.patricknoir.platform",
+                scalaVersion := "2.12.1"
+              )
+              .settings(libraryDependencies ++= commonDependencies)
+              .dependsOn(root)
+
+val client = project.in(file("client/"))
+  .settings(
+    version := "1.0.0-SNAPSHOT",
+    organization := "org.patricknoir.platform",
+    scalaVersion := "2.12.1"
+  )
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(root)
