@@ -13,6 +13,8 @@ import org.patricknoir.platform.runtime.Util.{CounterValueReq, CounterValueResp,
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import akka.pattern.ask
+import akka.stream.ActorMaterializer
+import io.circe.generic.auto._
 
 /**
   * Created by patrick on 15/03/2017.
@@ -22,6 +24,7 @@ object Boot extends App with LazyLogging {
   val bc = Util.bc
 
   implicit val system = ActorSystem("platform")
+  implicit val materializer = ActorMaterializer()
 
   import system.dispatcher
 
@@ -41,6 +44,8 @@ object Boot extends App with LazyLogging {
   val statusCounter2: Future[CounterValueResp] = (server ? CounterValueReq("Counter2")).mapTo[CounterValueResp]
 
   Future.sequence(Set(statusCounter1, statusCounter2)).onComplete(println)
+
+  runtime.run()
 
   Await.ready(system.whenTerminated, Duration.Inf)
   logger.info(s"Node ${InetAddress.getLocalHost.getHostName} terminated")

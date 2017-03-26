@@ -94,7 +94,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
 
   def findServiceForCommand(cmd: Command) = processor.commandModifiers.find(_.func.isDefinedAt(cmd))
   def findServiceForEvent(evt: Event) = processor.eventModifiers.find(_.func.isDefinedAt(evt))
-  def findServiceForQuery(req: Request) = processor.queries.find(_.func.isDefinedAt(req))
+  def findServiceForQuery(req: Request) = processor.queries.map(_._1).find(_.func.isDefinedAt(req))
 
   def fireEvents(events: Seq[Event]) = {
     events.foreach(e => s"Notifying event: $e")

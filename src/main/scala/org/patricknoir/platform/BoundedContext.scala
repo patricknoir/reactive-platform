@@ -4,6 +4,7 @@ import cats.Monoid
 import cats.syntax.all._
 import cats._
 import cats.data._
+import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
 import org.patricknoir.platform.protocol._
 
 import scala.concurrent.Future
@@ -32,8 +33,10 @@ case class Processor[W] (
   model: W,
   commandModifiers: Set[Cmd[W]],
   eventModifiers: Set[Evt[W]],
-  queries: Set[Ask[W]] = Set.empty[Ask[W]]
-) extends Component
+  queries: Set[(Ask[W], ReactiveDeserializer[_], ReactiveSerializer[_])] = Set.empty[(Ask[W], ReactiveDeserializer[_], ReactiveSerializer[_])]
+) extends Component {
+  type ModelType = W
+}
 
 trait ViewDescriptor
 case class KeyShardedViewDescriptor(

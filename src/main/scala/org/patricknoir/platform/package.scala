@@ -11,7 +11,10 @@ import scala.concurrent.Future
 package object platform {
 
   case class Service[-In, +Out](id: String, f: PartialFunction[In, Future[Out]])
-  case class StatefulService[M, -In, Out](id: String, func: PartialFunction[In, Future[State[M, Out]]])
+  case class StatefulService[M, In, Out](id: String, func: PartialFunction[In, Future[State[M, Out]]]) {
+    type Input  = In
+    type Output = Out
+  }
 
   type Cmd[S] = StatefulService[S, Command, Seq[Event]]
   type Evt[S] = StatefulService[S, Event, Seq[Event]]
