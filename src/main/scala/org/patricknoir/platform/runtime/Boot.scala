@@ -1,11 +1,11 @@
 package org.patricknoir.platform.runtime
 
+import org.patricknoir.platform.dsl._
 import java.net.InetAddress
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.util.Timeout
-import cats.data.State
 import org.patricknoir.platform.protocol.{Command, Event}
 import com.typesafe.scalalogging.LazyLogging
 import org.patricknoir.platform._
@@ -13,7 +13,7 @@ import org.patricknoir.platform.runtime.Util.{DecrementCounterCmd, IncrementCoun
 import org.patricknoir.platform.runtime.actors.ProcessorActor
 
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration._
 
 /**
   * Created by patrick on 15/03/2017.
@@ -24,6 +24,7 @@ object Boot extends App with LazyLogging {
 
   implicit val system = ActorSystem("platform")
 
+  implicit val timeout = Timeout(5 seconds)
 
   val clusters: Map[String, ActorRef] = bc.components.filter(_.isInstanceOf[Processor[_]]).map { component =>
     val processor = component.asInstanceOf[Processor[_]]
@@ -64,6 +65,7 @@ object Util {
     descriptor = KeyShardedProcessDescriptor(
       commandKeyExtractor = {
         case cmd @ IncrementCounterCmd(id, _) => (id, cmd)
+        case cmd @ DecrementCounterCmd(id, _) => (id, cmd)
       },
       eventKeyExtractor = PartialFunction.empty,
       dependencies = Set.empty,
@@ -71,6 +73,7 @@ object Util {
       shardSpaceSize = 100
     ),
     model = 0,
+    //TODO:  Will be good the command()() DSL also includes the key extraction if we are using KeySharded strategy
     commandModifiers = Set(
       command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
         (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
@@ -99,24 +102,5 @@ object Util {
   case class CounterIncrementedEvt(id: String, step: Int) extends Event
   case class DecrementCounterCmd(id: String, step: Int) extends Command
   case class CounterDecrementedEvt(id: String, step: Int) extends Event
-
-  object command {
-    def apply[C <: Command, S](id: String)(modifier: (S, C) => (S, Seq[Event])) = {
-      val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
-        case cmd: C => Future.successful(State(init => modifier(init, cmd)))
-      }
-      StatefulService[S, Command, Seq[Event]](id, fc)
-    }
-
-    def async[C <: Command, S](id: String)(modifier: (S, C) => Future[(S, Seq[Event])])(implicit ec: ExecutionContext, timeout: Timeout) = {
-      val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
-        case cmd: C =>
-          Future(State { init =>
-            Await.result(modifier(init, cmd), timeout.duration) //can I avoid this blocking?
-          })
-      }
-      StatefulService[S, Command, Seq[Event]](id, fc)
-    }
-  }
 
 }
