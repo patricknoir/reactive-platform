@@ -3,17 +3,16 @@ package org.patricknoir.platform.runtime
 import org.patricknoir.platform.dsl._
 import java.net.InetAddress
 
-import akka.actor.{ActorRef, ActorSystem}
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
+import akka.actor.ActorSystem
 import akka.util.Timeout
-import org.patricknoir.platform.protocol.{Command, Event}
+import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 import com.typesafe.scalalogging.LazyLogging
 import org.patricknoir.platform._
-import org.patricknoir.platform.runtime.Util.{DecrementCounterCmd, IncrementCounterCmd}
-import org.patricknoir.platform.runtime.actors.ProcessorActor
+import org.patricknoir.platform.runtime.Util.{CounterValueReq, CounterValueResp, DecrementCounterCmd, IncrementCounterCmd}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
+import akka.pattern.ask
 
 /**
   * Created by patrick on 15/03/2017.
@@ -24,33 +23,24 @@ object Boot extends App with LazyLogging {
 
   implicit val system = ActorSystem("platform")
 
+  import system.dispatcher
+
+  implicit val config = PlatformConfig.default
   implicit val timeout = Timeout(5 seconds)
 
-  val clusters: Map[String, ActorRef] = bc.components.filter(_.isInstanceOf[Processor[_]]).map { component =>
-    val processor = component.asInstanceOf[Processor[_]]
-    val descriptor = processor.descriptor.asInstanceOf[KeyShardedProcessDescriptor]
+  val runtime = platform(bc)
 
-    val extractIdFunction: PartialFunction[Any, (String, Any)] = {
-      case cmd: Command => descriptor.commandKeyExtractor(cmd)
-      case evt: Event => descriptor.eventKeyExtractor(evt)
-    }
-    val extractShardIdFunction = extractIdFunction.andThen(res => (descriptor.hashFunction(res._1) % descriptor.shardSpaceSize).toString)
-    (
-      processor.id,
-      ClusterSharding(system).start(
-        typeName = processor.id,
-        entityProps = ProcessorActor.props(processor),
-        settings = ClusterShardingSettings(system),
-        extractEntityId = extractIdFunction,
-        extractShardId = extractShardIdFunction
-      )
-    )
-  }.toMap
+  val server = runtime.processorServers("counterProcessor").server
 
-  clusters("counterProcessor") ! IncrementCounterCmd("Counter1", 1)
-  clusters("counterProcessor") ! IncrementCounterCmd("Counter1", 1)
-  clusters("counterProcessor") ! IncrementCounterCmd("Counter2", 1)
-  clusters("counterProcessor") ! DecrementCounterCmd("Counter2", 1)
+  server ! IncrementCounterCmd("Counter1", 1)
+  server ! IncrementCounterCmd("Counter1", 1)
+  server ! IncrementCounterCmd("Counter2", 1)
+  server ! DecrementCounterCmd("Counter2", 1)
+
+  val statusCounter1: Future[CounterValueResp] = (server ? CounterValueReq("Counter1")).mapTo[CounterValueResp]
+  val statusCounter2: Future[CounterValueResp] = (server ? CounterValueReq("Counter2")).mapTo[CounterValueResp]
+
+  Future.sequence(Set(statusCounter1, statusCounter2)).onComplete(println)
 
   Await.ready(system.whenTerminated, Duration.Inf)
   logger.info(s"Node ${InetAddress.getLocalHost.getHostName} terminated")
@@ -68,6 +58,9 @@ object Util {
         case cmd @ DecrementCounterCmd(id, _) => (id, cmd)
       },
       eventKeyExtractor = PartialFunction.empty,
+      queryKeyExtractor = {
+        case req @ CounterValueReq(id) => (id, req)
+      },
       dependencies = Set.empty,
       hashFunction = _.hashCode,
       shardSpaceSize = 100
@@ -82,7 +75,10 @@ object Util {
         (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
       }
     ),
-    eventModifiers = Set.empty
+    eventModifiers = Set.empty,
+    queries = Set(
+      request("counterValueReq") { (counter: Int, req: CounterValueReq) => CounterValueResp(req.id, counter) }
+    )
   )
 
   val bc = BoundedContext(
@@ -102,5 +98,8 @@ object Util {
   case class CounterIncrementedEvt(id: String, step: Int) extends Event
   case class DecrementCounterCmd(id: String, step: Int) extends Command
   case class CounterDecrementedEvt(id: String, step: Int) extends Event
+
+  case class CounterValueReq(id: String) extends Request
+  case class CounterValueResp(id: String, value: Int) extends Response
 
 }

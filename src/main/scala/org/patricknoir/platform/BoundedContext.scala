@@ -19,6 +19,7 @@ trait ProcessorDescriptor
 case class KeyShardedProcessDescriptor(
   commandKeyExtractor: PartialFunction[Command, (String, Command)],
   eventKeyExtractor: PartialFunction[Event, (String, Event)],
+  queryKeyExtractor: PartialFunction[Request, (String, Request)],
   dependencies: Set[ServiceURL],
   hashFunction: String => Int,
   shardSpaceSize: Int
@@ -30,7 +31,8 @@ case class Processor[W] (
   descriptor: ProcessorDescriptor,
   model: W,
   commandModifiers: Set[Cmd[W]],
-  eventModifiers: Set[Evt[W]]
+  eventModifiers: Set[Evt[W]],
+  queries: Set[Ask[W]] = Set.empty[Ask[W]]
 ) extends Component
 
 trait ViewDescriptor
@@ -53,7 +55,9 @@ case class Version(
   major: Int,
   minor: Int,
   patch: Int
-)
+) {
+  val formattedString = s"$major.$minor.$patch"
+}
 
 
 case class BoundedContext(
