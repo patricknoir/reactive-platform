@@ -2,9 +2,13 @@ import sbt.Keys.organization
 
 name := "reactive-platform"
 
-version := "1.0.0-SNAPSHOT"
-organization := "org.patricknoir.platform"
-scalaVersion := "2.12.1"
+
+val commonSettings = Seq(
+  version := "1.0.0-SNAPSHOT",
+  organization := "org.patricknoir.platform",
+  scalaVersion := "2.12.1",
+  dockerRepository := Some("patricknoir")
+)
 
 val Versions = new {
   val Circe = "0.7.0"
@@ -35,22 +39,18 @@ val commonDependencies = Seq(
 
 val root = project
             .in(file("."))
+            .settings(commonSettings)
             .settings(libraryDependencies ++= commonDependencies)
+            .enablePlugins(DockerPlugin, AshScriptPlugin)
 
 val server = project.in(file("server/"))
-              .settings(
-                version := "1.0.0-SNAPSHOT",
-                organization := "org.patricknoir.platform",
-                scalaVersion := "2.12.1"
-              )
+              .settings(commonSettings)
               .settings(libraryDependencies ++= commonDependencies)
               .dependsOn(root)
+              .enablePlugins(DockerPlugin, AshScriptPlugin)
 
 val client = project.in(file("client/"))
-  .settings(
-    version := "1.0.0-SNAPSHOT",
-    organization := "org.patricknoir.platform",
-    scalaVersion := "2.12.1"
-  )
+  .settings(commonSettings)
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(root)
+  .enablePlugins(DockerPlugin, AshScriptPlugin)

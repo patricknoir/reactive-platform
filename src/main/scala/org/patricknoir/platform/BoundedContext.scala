@@ -31,7 +31,7 @@ case class Processor[W] (
   override val version: Version,
   descriptor: ProcessorDescriptor,
   model: W,
-  commandModifiers: Set[Cmd[W]],
+  commandModifiers: Set[(Cmd[W], ReactiveDeserializer[_], ReactiveSerializer[_])],
   eventModifiers: Set[Evt[W]],
   queries: Set[(Ask[W], ReactiveDeserializer[_], ReactiveSerializer[_])] = Set.empty[(Ask[W], ReactiveDeserializer[_], ReactiveSerializer[_])]
 ) extends Component {

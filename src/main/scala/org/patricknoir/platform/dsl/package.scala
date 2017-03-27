@@ -17,7 +17,6 @@ import org.patricknoir.kafka.reactive.server.dsl._
 
 import scala.concurrent.duration._
 import akka.pattern.ask
-import shapeless.Nat._0
 
 /**
   * Created by patrick on 20/03/2017.
@@ -38,7 +37,7 @@ package object dsl {
       val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
         case cmd: C => Future.successful(State(init => modifier(init, cmd)))
       }
-      StatefulService[S, Command, Seq[Event]](id, fc)
+      (StatefulService[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
 
     def async[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => Future[(S, Seq[E])])(implicit ec: ExecutionContext, timeout: Timeout, ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[E]) = {
@@ -48,12 +47,12 @@ package object dsl {
             Await.result(modifier(init, cmd), timeout.duration) //can I avoid this blocking?
           })
       }
-      StatefulService[S, Command, Seq[Event]](id, fc)
+      (StatefulService[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
   }
 
   object processor {
-    def apply[W](id: String, init: W, version: Version = Version(1, 0, 0))(descriptor: ProcessorDescriptor)(modifiers: Cmd[W]*): Processor[W] = {
+    def apply[W](id: String, init: W, version: Version = Version(1, 0, 0))(descriptor: ProcessorDescriptor)(modifiers: (Cmd[W], ReactiveDeserializer[_], ReactiveSerializer[_])*): Processor[W] = {
       Processor[W](
         id = "counterProcessor",
         version = Version(1, 0, 0),
@@ -155,19 +154,30 @@ package object dsl {
       )
     }
 
-//    private def createCommandRoute(cmds: Set[Cmd[_]]) = {
-//      ReactiveRoute(cmds.map { cmd =>
-//        cmd.id -> ReactiveService(cmd.id)(cmd.func)
-//      }.toMap)
-//    }
-//
+    private def createCommandRoute[S](cmds: Set[(Cmd[S], ReactiveDeserializer[_], ReactiveSerializer[_])], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
+      cmds.map { case (cmd, deserializer, serializer) =>
+          ReactiveRoute(Map(cmd.id -> (ReactiveService[Array[Byte], Array[Byte]](cmd.id){ in =>
+            deserializer.deserialize(in) match {
+              case Left(err) => Future.failed[Array[Byte]](new RuntimeException("BAD REQUEST"))
+              case Right(input) =>
+                (server ? input).mapTo[Seq[cmd.Output]].map { evts =>
+                  println("events: " + evts)
+                  serializer.asInstanceOf[ReactiveSerializer[Seq[cmd.Output]]].serialize(evts)
+                }
+            }
+          })))
+      }.reduce(_ ~ _)
+    }
+
     private def createRequestRoute[W](reqs: Set[( Ask[W], ReactiveDeserializer[_], ReactiveSerializer[_])], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
       reqs.map { case (req, deserializer, serializer) =>
         ReactiveRoute(Map(req.id -> ReactiveService[Array[Byte], Array[Byte]](req.id){ in =>
           deserializer.deserialize(in) match {
             case Left(err) => Future.failed[Array[Byte]](new RuntimeException("BAD REQUEST"))
             case Right(input) =>
+              println(s"Received request: $input")
               (server ? input).mapTo[req.Output].map { response =>
+                println(s"Response is: $response")
                 serializer.asInstanceOf[ReactiveSerializer[req.Output]].serialize(response)
               }
           }

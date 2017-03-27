@@ -5,3 +5,5 @@ addCompilerPlugin(
 )
 
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox" % "0.2.9")
+
+addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.1.4")

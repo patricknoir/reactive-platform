@@ -32,6 +32,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
       log.warning(s"Handling input events not implemented yet, received: $evt")
     case req: Request =>
       handleRequest(req, sender)
+    case other => log.warning(s"Unhandled message: $other")
   }
 
   override def receiveRecover: Receive = {
@@ -92,7 +93,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     case ReceiveTimeout => throw new TimeoutException(s"Command Complete Timeout error: $cmd")
   }
 
-  def findServiceForCommand(cmd: Command) = processor.commandModifiers.find(_.func.isDefinedAt(cmd))
+  def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_._1).find(_.func.isDefinedAt(cmd))
   def findServiceForEvent(evt: Event) = processor.eventModifiers.find(_.func.isDefinedAt(evt))
   def findServiceForQuery(req: Request) = processor.queries.map(_._1).find(_.func.isDefinedAt(req))
 
