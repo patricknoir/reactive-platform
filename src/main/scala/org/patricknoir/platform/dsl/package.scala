@@ -171,17 +171,9 @@ package object dsl {
 
     private def createRequestRoute[W](reqs: Set[( Ask[W], ReactiveDeserializer[_], ReactiveSerializer[_])], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
       reqs.map { case (req, deserializer, serializer) =>
-        ReactiveRoute(Map(req.id -> ReactiveService[Array[Byte], Array[Byte]](req.id){ in =>
-          deserializer.deserialize(in) match {
-            case Left(err) => Future.failed[Array[Byte]](new RuntimeException("BAD REQUEST"))
-            case Right(input) =>
-              println(s"Received request: $input")
-              (server ? input).mapTo[req.Output].map { response =>
-                println(s"Response is: $response")
-                serializer.asInstanceOf[ReactiveSerializer[req.Output]].serialize(response)
-              }
-          }
-        }))
+        implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[req.Input]]
+        implicit val ser = serializer.asInstanceOf[ReactiveSerializer[req.Output]]
+        ReactiveRoute(Map(req.id -> ReactiveService[req.Input, req.Output](req.id)(in => (server ? in).mapTo[req.Output])))
       }.reduce(_ ~ _)
     }
   }
