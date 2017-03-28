@@ -6,7 +6,7 @@ import akka.actor.{ActorLogging, ActorRef, Props, ReceiveTimeout, Stash}
 import akka.persistence.PersistentActor
 import akka.util.Timeout
 import cats.data.State
-import org.patricknoir.platform.Processor
+import org.patricknoir.platform.{AsyncStatefulService, Cmd, Processor, SyncStatefulService}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 import org.patricknoir.platform.runtime.actors.ProcessorActor.CompleteCommand
 
@@ -59,17 +59,34 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
 
   def handleCommand(cmd: Command) = {
     log.debug(s"Received command: $cmd")
-    findServiceForCommand(cmd).map { service =>
+    findServiceForCommand(cmd).map {
+      case asyncService: AsyncStatefulService[T, Command, Seq[Event]] => handleAsyncCommand(asyncService, cmd)
+      case syncService: SyncStatefulService[T, Command, Seq[Event]] => handleSyncCommand(syncService, cmd)
+    }.orElse {
+      log.warning(s"Service not found for command: $cmd")
+      None
+    }
+  }
+
+  def handleAsyncCommand(service: Cmd[T], cmd: Command) = {
       log.debug(s"Service for command: $cmd found: ${service.id}")
       val fState: Future[State[T, Seq[Event]]] = service.func(cmd)
       //TODO: if Service type is Sync avoid to send CompleteCommand, investigate performance impact
       fState.onComplete(r => self ! CompleteCommand[T](cmd, r.toEither))
       context.setReceiveTimeout(timeout.duration)
       context.become(awaitingCommandComplete(cmd), discardOld = false)
-    }.orElse {
-      log.warning(s"Service not found for command: $cmd")
-      None
-    }
+  }
+
+  def update(state: State[T, Seq[Event]]) = {
+    val (newModel, events) = state.run(model).value
+    log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
+    model = newModel
+    fireEvents(events)
+  }
+
+  def handleSyncCommand(service: SyncStatefulService[T, Command, Seq[Event]], cmd: Command) = {
+    val state: State[T, Seq[Event]] = service.syncFunc(cmd)
+    update(state)
   }
 
   def awaitingCommandComplete(cmd: Command): Receive = {
@@ -80,13 +97,8 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
       handleRequest(req, sender)
     case cc : CompleteCommand[T] =>
       cc.result.fold(
-        err => log.error(err, s"error processing command: ${cc.cmd}"),
-        state => {
-          val (newModel, events) = state.run(model).value
-          log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
-          model = newModel
-          fireEvents(events)
-        }
+        err   => log.error(err, s"error processing command: ${cc.cmd}"),
+        state => update(state)
       )
       context.unbecome()
       unstashAll()

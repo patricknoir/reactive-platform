@@ -25,19 +25,19 @@ package object dsl {
 
   object request {
     def apply[Req <: Request, Resp <: Response, S](id: String)(query: (S, Req) => Resp)(implicit reqCT: ClassTag[Req], respCT: ClassTag[Resp], deserializer: ReactiveDeserializer[Req], serializer: ReactiveSerializer[Resp]) = {
-      val fc: PartialFunction[Request, Future[State[S, Response]]] = {
-        case req: Req => Future.successful(State.inspect(state => query(state, req)))
+      val fc: PartialFunction[Request, State[S, Response]] = {
+        case req: Req => State.inspect(state => query(state, req))
       }
-      (StatefulService[S, Request, Response](id, fc), deserializer, serializer)
+      (StatefulService.sync[S, Request, Response](id, fc), deserializer, serializer)
     }
   }
 
   object command {
     def apply[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => (S, Seq[E]))(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[E]) = {
-      val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
-        case cmd: C => Future.successful(State(init => modifier(init, cmd)))
+      val fc: PartialFunction[Command, State[S, Seq[Event]]] = {
+        case cmd: C => State(init => modifier(init, cmd))
       }
-      (StatefulService[S, Command, Seq[Event]](id, fc), deserializer, serializer)
+      (StatefulService.sync[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
 
     def async[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => Future[(S, Seq[E])])(implicit ec: ExecutionContext, timeout: Timeout, ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[E]) = {
@@ -47,7 +47,7 @@ package object dsl {
             Await.result(modifier(init, cmd), timeout.duration) //can I avoid this blocking?
           })
       }
-      (StatefulService[S, Command, Seq[Event]](id, fc), deserializer, serializer)
+      (StatefulService.async[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
   }
 
