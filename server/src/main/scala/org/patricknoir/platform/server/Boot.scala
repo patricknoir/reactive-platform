@@ -39,7 +39,6 @@ object Boot extends App with LazyLogging {
       shardSpaceSize = 100
     ),
     model = 0,
-    //TODO:  Will be good the command()() DSL also includes the key extraction if we are using KeySharded strategy
     commandModifiers = Set(
       command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
         (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
@@ -78,18 +77,6 @@ object Boot extends App with LazyLogging {
   implicit val timeout = Timeout(5 seconds)
 
   val runtime = platform(bc)
-
-  val server = runtime.processorServers("counterProcessor").server
-
-  server ! IncrementCounterCmd("Counter1", 1)
-  server ! IncrementCounterCmd("Counter1", 1)
-  server ! IncrementCounterCmd("Counter2", 1)
-  server ! DecrementCounterCmd("Counter2", 1)
-
-  val statusCounter1: Future[CounterValueResp] = (server ? CounterValueReq("Counter1")).mapTo[CounterValueResp]
-  val statusCounter2: Future[CounterValueResp] = (server ? CounterValueReq("Counter2")).mapTo[CounterValueResp]
-
-  Future.sequence(Set(statusCounter1, statusCounter2)).onComplete(println)
 
   runtime.run()
 

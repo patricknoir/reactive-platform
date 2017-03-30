@@ -81,7 +81,6 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     val (newModel, events) = state.run(model).value
     log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
     model = newModel
-    fireEvents(events)
   }
 
   def handleSyncCommand(service: SyncStatefulService[T, Command, Seq[Event]], cmd: Command) = {
@@ -105,13 +104,10 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     case ReceiveTimeout => throw new TimeoutException(s"Command Complete Timeout error: $cmd")
   }
 
-  def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_._1).find(_.func.isDefinedAt(cmd))
+  def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_.service).find(_.func.isDefinedAt(cmd))
   def findServiceForEvent(evt: Event) = processor.eventModifiers.find(_.func.isDefinedAt(evt))
-  def findServiceForQuery(req: Request) = processor.queries.map(_._1).find(_.func.isDefinedAt(req))
+  def findServiceForQuery(req: Request) = processor.queries.map(_.service).find(_.func.isDefinedAt(req))
 
-  def fireEvents(events: Seq[Event]) = {
-    events.foreach(e => s"Notifying event: $e")
-  }
 }
 
 object ProcessorActor {

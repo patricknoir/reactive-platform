@@ -2,6 +2,7 @@ package org.patricknoir.platform
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
+import akka.kafka.ConsumerMessage.CommittableMessage
 import akka.util.Timeout
 import cats.data.State
 import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
@@ -17,6 +18,8 @@ import org.patricknoir.kafka.reactive.server.dsl._
 
 import scala.concurrent.duration._
 import akka.pattern.ask
+import akka.stream.scaladsl.Flow
+import org.patricknoir.kafka.reactive.client.actors.KafkaConsumerActor.KafkaResponseEnvelope
 
 /**
   * Created by patrick on 20/03/2017.
@@ -28,31 +31,31 @@ package object dsl {
       val fc: PartialFunction[Request, State[S, Response]] = {
         case req: Req => State.inspect(state => query(state, req))
       }
-      (StatefulService.sync[S, Request, Response](id, fc), deserializer, serializer)
+      StatefulServiceInfo[S, Request, Response](StatefulService.sync[S, Request, Response](id, fc), deserializer, serializer)
     }
   }
 
   object command {
-    def apply[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => (S, Seq[E]))(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[E]) = {
+    def apply[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => (S, Seq[E]))(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
       val fc: PartialFunction[Command, State[S, Seq[Event]]] = {
         case cmd: C => State(init => modifier(init, cmd))
       }
-      (StatefulService.sync[S, Command, Seq[Event]](id, fc), deserializer, serializer)
+      StatefulServiceInfo[S, Command, Seq[Event]](StatefulService.sync[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
 
-    def async[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => Future[(S, Seq[E])])(implicit ec: ExecutionContext, timeout: Timeout, ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[E]) = {
+    def async[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => Future[(S, Seq[E])])(implicit ec: ExecutionContext, timeout: Timeout, ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
       val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
         case cmd: C =>
           Future(State { init =>
             Await.result(modifier(init, cmd), timeout.duration) //can I avoid this blocking?
           })
       }
-      (StatefulService.async[S, Command, Seq[Event]](id, fc), deserializer, serializer)
+      StatefulServiceInfo[S, Command, Seq[Event]](StatefulService.async[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
   }
 
   object processor {
-    def apply[W](id: String, init: W, version: Version = Version(1, 0, 0))(descriptor: ProcessorDescriptor)(modifiers: (Cmd[W], ReactiveDeserializer[_], ReactiveSerializer[_])*): Processor[W] = {
+    def apply[W](id: String, init: W, version: Version = Version(1, 0, 0))(descriptor: ProcessorDescriptor)(modifiers: CmdInfo[W]*): Processor[W] = {
       Processor[W](
         id = "counterProcessor",
         version = Version(1, 0, 0),
@@ -64,31 +67,6 @@ package object dsl {
       )
     }
   }
-
-//  object ProcessorExample {
-//    import io.circe.generic.auto._
-//
-//    val counterProcessor = processor[Int]("counterProcessor", 0)(KeyShardedProcessDescriptor(
-//      commandKeyExtractor = {
-//        case cmd@IncrementCounterCmd(id, _) => (id, cmd)
-//        case cmd@DecrementCounterCmd(id, _) => (id, cmd)
-//      },
-//      eventKeyExtractor = PartialFunction.empty,
-//      queryKeyExtractor = {
-//        case req@CounterValueReq(id) => (id, req)
-//      },
-//      dependencies = Set.empty,
-//      hashFunction = _.hashCode,
-//      shardSpaceSize = 100
-//    ))(
-//      command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
-//        (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-//      },
-//      command("decrementCmd") { (counter: Int, dc: DecrementCounterCmd) =>
-//        (counter - dc.step, Seq(CounterDecrementedEvt(dc.id, dc.step)))
-//      }
-//    )
-//  }
 
 
   case class PlatformConfig(
@@ -137,40 +115,37 @@ package object dsl {
       val commandTopic = topicPrefix + bc.commandMailboxName
       val requestTopic = topicPrefix + bc.requestMailboxName
 
-//      val commandSource = ReactiveKafkaSource.atLeastOnce(commandTopic, config.messageFabricServers, topicPrefix + "command")
+      val commandSource = ReactiveKafkaSource.atLeastOnce(commandTopic, config.messageFabricServers, topicPrefix + "command")
       val requestSource = ReactiveKafkaSource.atLeastOnce(requestTopic, config.messageFabricServers, topicPrefix + "request")
-//
-//      val commandSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers)
+
+
+      val commandFlow = Flow.fromFunction[(CommittableMessage[String, String], Future[KafkaResponseEnvelope]), (CommittableMessage[String, String], Future[KafkaResponseEnvelope])] { case (c, fResp) =>
+        (c, fResp.map(_.copy(replyTo = bc.eventMailboxName)))
+      }
+      val commandSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers)
       val responseSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers)
-//
-//      val cmdRS = commandSource ~> createCommandRoute(processor.commandModifiers) ~> commandSink
+
+      val cmdRS = commandSource ~> createCommandRoute(processor.commandModifiers, server) ~> (commandFlow to commandSink)
       val reqRS = requestSource ~> createRequestRoute(processor.queries, server) ~> responseSink
 
       ProcessorServer(
         processor,
         server,
-        reqRS
-//        cmdRS
+        reqRS,
+        cmdRS
       )
     }
 
-    private def createCommandRoute[S](cmds: Set[(Cmd[S], ReactiveDeserializer[_], ReactiveSerializer[_])], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
-      cmds.map { case (cmd, deserializer, serializer) =>
-          ReactiveRoute(Map(cmd.id -> (ReactiveService[Array[Byte], Array[Byte]](cmd.id){ in =>
-            deserializer.deserialize(in) match {
-              case Left(err) => Future.failed[Array[Byte]](new RuntimeException("BAD REQUEST"))
-              case Right(input) =>
-                (server ? input).mapTo[Seq[cmd.Output]].map { evts =>
-                  println("events: " + evts)
-                  serializer.asInstanceOf[ReactiveSerializer[Seq[cmd.Output]]].serialize(evts)
-                }
-            }
-          })))
+    private def createCommandRoute[S](cmds: Set[CmdInfo[S]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
+      cmds.map { case StatefulServiceInfo(cmd, deserializer, serializer) =>
+        implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[cmd.Input]]
+        implicit val ser = serializer.asInstanceOf[ReactiveSerializer[cmd.Output]]
+        ReactiveRoute(Map(cmd.id -> (ReactiveService[cmd.Input, cmd.Output](cmd.id)(in => (server ? in).mapTo[cmd.Output]))))
       }.reduce(_ ~ _)
     }
 
-    private def createRequestRoute[W](reqs: Set[( Ask[W], ReactiveDeserializer[_], ReactiveSerializer[_])], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
-      reqs.map { case (req, deserializer, serializer) =>
+    private def createRequestRoute[W](reqs: Set[AskInfo[W]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
+      reqs.map { case StatefulServiceInfo(req, deserializer, serializer) =>
         implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[req.Input]]
         implicit val ser = serializer.asInstanceOf[ReactiveSerializer[req.Output]]
         ReactiveRoute(Map(req.id -> ReactiveService[req.Input, req.Output](req.id)(in => (server ? in).mapTo[req.Output])))

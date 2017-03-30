@@ -20,7 +20,7 @@ object SimpleClient extends App {
   import org.patricknoir.platform.Util._
 
   implicit val system = ActorSystem("platformClient")
-  implicit val timeout = Timeout(10 seconds)
+  implicit val timeout = Timeout(100 seconds)
 
   import system.dispatcher
 
@@ -46,4 +46,5 @@ object SimpleClient extends App {
     import io.circe.syntax._
     resp.asJson.pretty(io.circe.Printer.spaces2)
   }
+
 }

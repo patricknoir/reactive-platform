@@ -1,6 +1,7 @@
 package org.patricknoir
 
 import cats.data.State
+import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 
 import scala.concurrent.Future
@@ -31,7 +32,26 @@ package object platform {
     def sync[M, In, Out](id: String, service: PartialFunction[In, State[M, Out]]) = SyncStatefulService(id, service)
   }
 
+  /**
+    * This is used to collect information on the specific service function together
+    * with the serialiser and deserialiser to be used to receive and send input/output
+    * over the network.
+    * @param service
+    * @param deserializer
+    * @param serializer
+    * @tparam S
+    * @tparam I
+    * @tparam O
+    */
+  case class StatefulServiceInfo[S, I, O](
+    service: StatefulService[S, I, O],
+    deserializer: ReactiveDeserializer[_ <: I],
+    serializer: ReactiveSerializer[_ <: O]
+  )
 
+  type CmdInfo[S] = StatefulServiceInfo[S, Command, Seq[Event]]
+  type EvtInfo[S] = StatefulServiceInfo[S, Event, Seq[Event]]
+  type AskInfo[S] = StatefulServiceInfo[S, Request, Response]
 
   type Cmd[S] = StatefulService[S, Command, Seq[Event]]
   type Evt[S] = StatefulService[S, Event, Seq[Event]]

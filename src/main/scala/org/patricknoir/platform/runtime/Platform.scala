@@ -15,7 +15,11 @@ case class Platform(
   val processorServers: Map[String, ProcessorServer]
 ) {
   def run()(implicit ec: ExecutionContext, materializer: Materializer): Future[Unit] = {
-    processorServers.values.map(_.queryReactiveSystem.run())
+    processorServers.values.map { server =>
+      server.queryReactiveSystem.run()
+      server.commandReactiveSystem.run()
+    }
+
     Future.successful[Unit](()) //FIXME
   }
 }
@@ -27,8 +31,8 @@ object Platform {
 case class ProcessorServer(
   processor: Processor[_],
   server: ActorRef,
-  queryReactiveSystem: ReactiveSystem
-  //  commandReactiveSystem: ReactiveSystem
+  queryReactiveSystem: ReactiveSystem,
+  commandReactiveSystem: ReactiveSystem
 )
 
 
