@@ -1,7 +1,9 @@
 package org.patricknoir.platform
 
-import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
 import org.patricknoir.platform.protocol._
+import sun.reflect.generics.reflectiveObjects.NotImplementedException
+
+import scala.concurrent.Future
 
 /**
   * Represents the coordinate of a specific server
@@ -23,6 +25,7 @@ case class ServiceURL(boundedContextId: String, componentId: String, serviceId: 
 trait Component {
   val id: String
   val version: Version
+  val context: ComponentContext
 }
 
 /**
@@ -89,21 +92,20 @@ case class BoundedContext(
   * @param version processor component version
   * @param descriptor describes how the processor should be created (singleton, one per entity etc...)
   * @param model root-aggregate
-  * @param commandModifiers the set of reducers which describe how the root-aggregate should be modified in reaction to commands
-  * @param eventModifiers the set of reducers which describe how the root-aggregate should be modified in reaction to events
-  * @param queries the set of requests/response the root-aggregate can answer.
   * @tparam W represents the root-aggregate type.
   */
-case class Processor[W] (
+abstract class Processor[W] (
   override val id: String,
   override val version: Version,
-  descriptor: ProcessorDescriptor,
-  model: W,
-  commandModifiers: Set[CmdInfo[W]],
-  eventModifiers: Set[Evt[W]],
-  queries: Set[AskInfo[W]] = Set.empty[AskInfo[W]]
+  override val context: ComponentContext,
+  val descriptor: ProcessorDescriptor,
+  val model: W
 )(implicit failHandler: Throwable => Failure) extends Component {
   type ModelType = W
+
+  def commandModifiers(): Set[CmdInfo[W]] = Set.empty[CmdInfo[W]]
+  def eventModifiers(): Set[Evt[W]] = Set.empty[Evt[W]]
+  def queries(): Set[AskInfo[W]] = Set.empty[AskInfo[W]]
 }
 
 /**
@@ -155,6 +157,7 @@ case class KeyShardedProcessDescriptor(
 case class View[R](
   override val id: String,
   override val version: Version,
+  override val context: ComponentContext,
   descriptor: ViewDescriptor,
   model: R,
   modifiers: Set[Evt[R]],
@@ -162,6 +165,14 @@ case class View[R](
 ) extends Component
 
 trait ViewDescriptor
+
+trait ComponentContext {
+  def request[R <: Request, RR <: Response](target: String, request: R): Future[RR]
+}
+case class DefaultComponentContextImpl() extends ComponentContext {
+  override def request[R <: Request, RR <: Response](target: String, request: R): Future[RR] =
+    Future.failed(new NotImplementedException)
+}
 
 case class KeyShardedViewDescriptor(
   eventKeyExtractor: PartialFunction[Event, (String, Event)],

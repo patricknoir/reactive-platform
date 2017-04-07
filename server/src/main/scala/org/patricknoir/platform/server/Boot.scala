@@ -5,13 +5,11 @@ import java.net.InetAddress
 
 import akka.actor.ActorSystem
 import akka.util.Timeout
-import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 import com.typesafe.scalalogging.LazyLogging
 import org.patricknoir.platform._
 
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.Await
 import scala.concurrent.duration._
-import akka.pattern.ask
 import akka.stream.ActorMaterializer
 import org.patricknoir.platform.Util._
 
@@ -22,36 +20,55 @@ object Boot extends App with LazyLogging {
 
   import io.circe.generic.auto._
 
-  val counterProcessor = Processor[Int](
+  // TODO: ??? had to take this out from the constructor
+  val counterDescriptor = KeyShardedProcessDescriptor(
+    commandKeyExtractor = {
+      case cmd @ IncrementCounterCmd(id, _) => (id, cmd)
+      case cmd @ DecrementCounterCmd(id, _) => (id, cmd)
+      case cmd @ IncrementCounterIfCmd(id, _, _) => (id, cmd)
+    },
+    eventKeyExtractor = PartialFunction.empty,
+    queryKeyExtractor = {
+      case req @ CounterValueReq(id) => (id, req)
+    },
+    dependencies = Set.empty,
+    hashFunction = _.hashCode,
+    shardSpaceSize = 100
+  )
+
+  val counterProcessor = new Processor[Int](
     id = "counterProcessor",
     version = Version(1, 0, 0),
-    descriptor = KeyShardedProcessDescriptor(
-      commandKeyExtractor = {
-        case cmd @ IncrementCounterCmd(id, _) => (id, cmd)
-        case cmd @ DecrementCounterCmd(id, _) => (id, cmd)
-      },
-      eventKeyExtractor = PartialFunction.empty,
-      queryKeyExtractor = {
-        case req @ CounterValueReq(id) => (id, req)
-      },
-      dependencies = Set.empty,
-      hashFunction = _.hashCode,
-      shardSpaceSize = 100
-    ),
-    model = 0,
-    commandModifiers = Set(
+    context = DefaultComponentContextImpl(), // FIXME:
+    descriptor = counterDescriptor,
+    model = 0
+  ) {
+
+    // FIXME: This execution context should not be configured like this !!!
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    implicit val defaultTimeout = Timeout(10 seconds)
+
+    override def commandModifiers() = Set(
       command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
         (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
       },
       command("decrementCmd") { (counter: Int, ic: DecrementCounterCmd) =>
         (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
+      },
+      command.async("incrementIfCmd") { (counter: Int, ic: IncrementCounterIfCmd) =>
+        // Following handling is just for demo purposes
+        context.request[CounterValueReq, CounterValueResp]("counterProcessor", CounterValueReq(ic.id)).map(resp =>
+          if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+          else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}")
+        )
       }
-    ),
-    eventModifiers = Set.empty,
-    queries = Set(
+    )
+    override def eventModifiers() = Set.empty
+    override def queries() = Set(
       request("counterValueReq") { (counter: Int, req: CounterValueReq) => CounterValueResp(req.id, counter) }
     )
-  )
+  }
 
   val bc = BoundedContext(
     id = "counterBC",

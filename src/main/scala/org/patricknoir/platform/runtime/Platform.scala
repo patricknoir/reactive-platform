@@ -67,7 +67,6 @@ object Platform extends LazyLogging {
 
     val zkUtils = ZkUtils(config.zookeeperHosts.mkString(" "), 10000, 10000, false)
 
-
     val mailboxPrefix = s"${bc.id}_${bc.version.formattedString}_"
 
     (bc.requestMailboxName :: bc.responseMailboxName :: bc.commandMailboxName :: bc.eventMailboxName :: bc.failureMailboxName :: bc.auditMailboxName :: bc.logMailboxName :: Nil).map( mailboxPrefix + _ ).foreach(createMailbox)

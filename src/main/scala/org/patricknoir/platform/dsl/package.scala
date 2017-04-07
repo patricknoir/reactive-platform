@@ -2,16 +2,13 @@ package org.patricknoir.platform
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.ActorSystem
 import akka.util.Timeout
 import cats.data.State
 import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
-import org.patricknoir.platform.runtime.Platform
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.reflect.ClassTag
-import scala.concurrent.duration._
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.collection.convert.ImplicitConversionsToScala._
@@ -48,21 +45,6 @@ package object dsl {
       StatefulServiceInfo[S, Command, Seq[Event]](StatefulService.async[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
   }
-
-  object processor {
-    def apply[W](id: String, init: W, version: Version = Version(1, 0, 0))(descriptor: ProcessorDescriptor)(modifiers: CmdInfo[W]*): Processor[W] = {
-      Processor[W](
-        id = "counterProcessor",
-        version = Version(1, 0, 0),
-        descriptor = descriptor,
-        model = init,
-        //TODO:  Will be good the command()() DSL also includes the key extraction if we are using KeySharded strategy
-        commandModifiers = modifiers.toSet,
-        eventModifiers = Set.empty
-      )
-    }
-  }
-
 
   case class PlatformConfig(
     messageFabricServers: Set[String],
