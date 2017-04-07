@@ -78,6 +78,10 @@ Is also good practice to suffix the entities depending on their types based on t
 | Auditing            | Aud    |
 | Logging             | Log    |
 
+> **Note:** When there is a corrispondence 1-to-1 between `Command` -> `Event`, is good practice
+> to name the event with the past form of the `Command` and suffix `Evt`. i.e.:
+> `WalletCreateCmd` -> `WalletCreatedEvt`
+
 ### Service Module
 
 All the micro-services of the `Bounded Context` should be a module which leaves inside the folder service and has its own module folder

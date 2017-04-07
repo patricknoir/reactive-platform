@@ -55,21 +55,21 @@ case class Version(
   * @param commandMailboxName
   * @param eventMailboxName
   * @param failureMailboxName
-  * @param auditingMailboxName
-  * @param loggingMailboxName
+  * @param auditMailboxName
+  * @param logMailboxName
   * @param components
   */
 case class BoundedContext(
-  id: String,
-  version: Version,
-  requestMailboxName: String,
-  responseMailboxName: String,
-  commandMailboxName: String,
-  eventMailboxName: String,
-  failureMailboxName: String,
-  auditingMailboxName: String,
-  loggingMailboxName: String,
-  components: Set[Component]
+   id: String,
+   version: Version,
+   requestMailboxName: String = "requests",
+   responseMailboxName: String = "responses",
+   commandMailboxName: String = "commands",
+   eventMailboxName: String = "events",
+   failureMailboxName: String = "failures",
+   auditMailboxName: String = "audits",
+   logMailboxName: String = "logs",
+   components: Set[Component]
 )
 
 /**
@@ -102,7 +102,7 @@ case class Processor[W] (
   commandModifiers: Set[CmdInfo[W]],
   eventModifiers: Set[Evt[W]],
   queries: Set[AskInfo[W]] = Set.empty[AskInfo[W]]
-) extends Component {
+)(implicit failHandler: Throwable => Failure) extends Component {
   type ModelType = W
 }
 

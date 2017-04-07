@@ -1,25 +1,20 @@
 package org.patricknoir.platform
 
-import akka.actor.{ActorRef, ActorSystem}
-import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
-import akka.kafka.ConsumerMessage.CommittableMessage
+import java.util.concurrent.TimeUnit
+
+import akka.actor.ActorSystem
 import akka.util.Timeout
 import cats.data.State
 import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
-import org.patricknoir.kafka.reactive.server.{ReactiveRoute, ReactiveService, ReactiveSystem}
-import org.patricknoir.kafka.reactive.server.streams.{ReactiveKafkaSink, ReactiveKafkaSource}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
-import org.patricknoir.platform.runtime.{Platform, ProcessorServer}
-import org.patricknoir.platform.runtime.actors.ProcessorActor
+import org.patricknoir.platform.runtime.Platform
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.reflect.ClassTag
-import org.patricknoir.kafka.reactive.server.dsl._
-
 import scala.concurrent.duration._
-import akka.pattern.ask
-import akka.stream.scaladsl.Flow
-import org.patricknoir.kafka.reactive.client.actors.KafkaConsumerActor.KafkaResponseEnvelope
+import com.typesafe.config.{Config, ConfigFactory}
+
+import scala.collection.convert.ImplicitConversionsToScala._
 
 /**
   * Created by patrick on 20/03/2017.
@@ -71,86 +66,18 @@ package object dsl {
 
   case class PlatformConfig(
     messageFabricServers: Set[String],
+    zookeeperHosts: Set[String],
     serverDefaultTimeout: Timeout
   )
 
   object PlatformConfig {
-    lazy val default = PlatformConfig(
-      messageFabricServers = Set("kafka1:9092"),
-      serverDefaultTimeout = Timeout(5 seconds)
+    lazy val default = PlatformConfig.load()
+
+    def load(config: Config = ConfigFactory.load("platform")) = PlatformConfig(
+      messageFabricServers = config.getStringList("platform.fabric.message.hosts").toList.toSet,
+      zookeeperHosts = config.getStringList("platform.fabric.message.zookeeper").toList.toSet,
+      serverDefaultTimeout = Timeout(config.getDuration("platform.server.timeout").getSeconds, TimeUnit.SECONDS)
     )
-  }
-
-  /** Create connectivities */
-  object platform {
-
-    def apply(bc: BoundedContext)(implicit system: ActorSystem, config: PlatformConfig): Platform = Platform(
-      processorServers = bc.components
-        .filter(_.isInstanceOf[Processor[_]])
-        .map(component => (component.id -> createProcessorServer(bc, component.asInstanceOf[Processor[_]])))
-        .toMap
-    )
-
-    def createProcessorServer(bc: BoundedContext, processor: Processor[_])(implicit system: ActorSystem, config: PlatformConfig): ProcessorServer = {
-      import system.dispatcher
-      implicit val timeout = config.serverDefaultTimeout
-
-      val descriptor = processor.descriptor.asInstanceOf[KeyShardedProcessDescriptor]
-      val extractIdFunction: PartialFunction[Any, (String, Any)] = {
-        case cmd: Command => descriptor.commandKeyExtractor(cmd)
-        case evt: Event => descriptor.eventKeyExtractor(evt)
-        case req: Request => descriptor.queryKeyExtractor(req)
-      }
-      val extractShardIdFunction = extractIdFunction.andThen(res => (descriptor.hashFunction(res._1) % descriptor.shardSpaceSize).toString)
-
-      val server = ClusterSharding(system).start(
-        typeName = processor.id,
-        entityProps = ProcessorActor.props(processor),
-        settings = ClusterShardingSettings(system),
-        extractEntityId = extractIdFunction,
-        extractShardId = extractShardIdFunction
-      )
-
-      val topicPrefix = bc.id + "_" + bc.version.formattedString + "_"
-      val commandTopic = topicPrefix + bc.commandMailboxName
-      val requestTopic = topicPrefix + bc.requestMailboxName
-
-      val commandSource = ReactiveKafkaSource.atLeastOnce(commandTopic, config.messageFabricServers, topicPrefix + "command")
-      val requestSource = ReactiveKafkaSource.atLeastOnce(requestTopic, config.messageFabricServers, topicPrefix + "request")
-
-
-      val commandFlow = Flow.fromFunction[(CommittableMessage[String, String], Future[KafkaResponseEnvelope]), (CommittableMessage[String, String], Future[KafkaResponseEnvelope])] { case (c, fResp) =>
-        (c, fResp.map(_.copy(replyTo = bc.eventMailboxName)))
-      }
-      val commandSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers)
-      val responseSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers)
-
-      val cmdRS = commandSource ~> createCommandRoute(processor.commandModifiers, server) ~> (commandFlow to commandSink)
-      val reqRS = requestSource ~> createRequestRoute(processor.queries, server) ~> responseSink
-
-      ProcessorServer(
-        processor,
-        server,
-        reqRS,
-        cmdRS
-      )
-    }
-
-    private def createCommandRoute[S](cmds: Set[CmdInfo[S]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
-      cmds.map { case StatefulServiceInfo(cmd, deserializer, serializer) =>
-        implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[cmd.Input]]
-        implicit val ser = serializer.asInstanceOf[ReactiveSerializer[cmd.Output]]
-        ReactiveRoute(Map(cmd.id -> (ReactiveService[cmd.Input, cmd.Output](cmd.id)(in => (server ? in).mapTo[cmd.Output]))))
-      }.reduce(_ ~ _)
-    }
-
-    private def createRequestRoute[W](reqs: Set[AskInfo[W]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
-      reqs.map { case StatefulServiceInfo(req, deserializer, serializer) =>
-        implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[req.Input]]
-        implicit val ser = serializer.asInstanceOf[ReactiveSerializer[req.Output]]
-        ReactiveRoute(Map(req.id -> ReactiveService[req.Input, req.Output](req.id)(in => (server ? in).mapTo[req.Output])))
-      }.reduce(_ ~ _)
-    }
   }
 
 }

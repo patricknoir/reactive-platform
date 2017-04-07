@@ -15,6 +15,7 @@ val Versions = new {
   val Cats = "0.9.0"
   val ReactiveSystem = "0.3.0"
   val Akka = "2.4.17"
+  val Kafka = "0.10.2.0"
 }
 
 val commonDependencies = Seq(
@@ -32,7 +33,8 @@ val commonDependencies = Seq(
   "com.typesafe.scala-logging" %% "scala-logging" % "3.5.0",
   "ch.qos.logback" % "logback-classic" % "1.1.3",
   "org.iq80.leveldb"            % "leveldb"          % "0.7",
-  "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8"
+  "org.fusesource.leveldbjni"   % "leveldbjni-all"   % "1.8",
+  "org.apache.kafka" % "kafka_2.12" % Versions.Kafka
 )
 
 
@@ -55,8 +57,21 @@ val client = project.in(file("client/"))
   .dependsOn(root)
   .enablePlugins(DockerPlugin, AshScriptPlugin)
 
-val walletExample = project.in(file("examples/wallet"))
+/** Examples: **/
+
+val walletSystem = project.in(file("examples/wallet-system"))
   .settings(commonSettings)
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(root)
   .enablePlugins(DockerPlugin, AshScriptPlugin)
+
+val protocol = project.in(file("examples/wallet-system/protocol"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(root)
+
+val walletService = project
+  .in(file("examples/wallet-system/service/wallet-service"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(protocol, root)

@@ -61,8 +61,8 @@ object Boot extends App with LazyLogging {
     commandMailboxName = "commands",
     eventMailboxName = "events",
     failureMailboxName = "failures",
-    auditingMailboxName = "auditing",
-    loggingMailboxName = "logging",
+    auditMailboxName = "auditing",
+    logMailboxName = "logging",
     components = Set(counterProcessor)
   )
 

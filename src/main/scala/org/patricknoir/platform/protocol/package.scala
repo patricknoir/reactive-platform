@@ -113,5 +113,8 @@ package object protocol {
   trait Idempotence { self: Message =>
   }
 
+  case class RuntimeFail(throwable: Throwable) extends Failure
+
+  implicit def runtimeErrorToFailure(throwable: Throwable): RuntimeFail = RuntimeFail(throwable)
 }
 
