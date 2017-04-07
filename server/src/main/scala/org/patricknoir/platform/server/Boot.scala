@@ -76,9 +76,7 @@ object Boot extends App with LazyLogging {
   implicit val config = PlatformConfig.default
   implicit val timeout = Timeout(5 seconds)
 
-  val runtime = platform(bc)
-
-  runtime.run()
+  val runtime = Platform.install(bc)
 
   Await.ready(system.whenTerminated, Duration.Inf)
   logger.info(s"Node ${InetAddress.getLocalHost.getHostName} terminated")
