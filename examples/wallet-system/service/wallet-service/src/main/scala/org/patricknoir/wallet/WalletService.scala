@@ -12,7 +12,7 @@ object WalletService extends App {
   val walletBoundedContext = BoundedContext(
     id = "walletSystem",
     version = Version(1, 0, 0),
-    components = Set(walletProcessor)
+    componentDefs = Set(walletProcessor)
   )
 
   val runtime = Platform.install(walletBoundedContext)

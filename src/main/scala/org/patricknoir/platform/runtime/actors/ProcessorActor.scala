@@ -11,7 +11,6 @@ import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 import org.patricknoir.platform.runtime.actors.ProcessorActor.CompleteCommand
 
 import scala.concurrent.Future
-import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 /**
@@ -27,7 +26,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
 
   override def receiveCommand: Receive = {
     case cmd: Command =>
-      handleCommand(cmd)
+      handleCommand(cmd, sender)
     case evt: Event =>
       log.warning(s"Handling input events not implemented yet, received: $evt")
     case req: Request =>
@@ -39,7 +38,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     case msg => log.warning(s"Recovery message received: $msg")
   }
 
-  def handleRequest(req: Request, origin: ActorRef) = {
+  private def handleRequest(req: Request, origin: ActorRef) = {
     log.debug(s"Receoved request: $req")
     findServiceForQuery(req).map { service =>
       log.debug(s"Service for request: $req found: ${service.id}")
@@ -49,7 +48,8 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
           val resp = s.run(model).value._2
           log.debug(s"Replying to request: $req with response: $resp")
           origin ! resp
-        case Failure(err) => log.error(s"Error failed for request: $req")
+        case Failure(err) =>
+          log.error(s"Error failed for request: $req")
       }
     }.orElse {
       log.warning(s"Service not found for request: $req")
@@ -57,38 +57,39 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     }
   }
 
-  def handleCommand(cmd: Command) = {
+  private def handleCommand(cmd: Command, origin: ActorRef) = {
     log.debug(s"Received command: $cmd")
     findServiceForCommand(cmd).map {
-      case asyncService: AsyncStatefulService[T, Command, Seq[Event]] => handleAsyncCommand(asyncService, cmd)
-      case syncService: SyncStatefulService[T, Command, Seq[Event]] => handleSyncCommand(syncService, cmd)
+      case asyncService: AsyncStatefulService[T, Command, Seq[Event]] => handleAsyncCommand(asyncService, cmd, origin)
+      case syncService: SyncStatefulService[T, Command, Seq[Event]] => handleSyncCommand(syncService, cmd, origin)
     }.orElse {
       log.warning(s"Service not found for command: $cmd")
       None
     }
   }
 
-  def handleAsyncCommand(service: Cmd[T], cmd: Command) = {
-      log.debug(s"Service for command: $cmd found: ${service.id}")
-      val fState: Future[State[T, Seq[Event]]] = service.func(cmd)
-      //TODO: if Service type is Sync avoid to send CompleteCommand, investigate performance impact
-      fState.onComplete(r => self ! CompleteCommand[T](cmd, r.toEither))
-      context.setReceiveTimeout(timeout.duration)
-      context.become(awaitingCommandComplete(cmd), discardOld = false)
+  private def handleAsyncCommand(service: Cmd[T], cmd: Command, origin: ActorRef) = {
+    log.debug(s"Service for command: $cmd found: ${service.id}")
+    val fState: Future[State[T, Seq[Event]]] = service.func(cmd)
+    fState.onComplete(r => self ! CompleteCommand[T](cmd, r.toEither, origin))
+    context.setReceiveTimeout(timeout.duration)
+    context.become(awaitingCommandComplete(cmd), discardOld = false)
   }
 
-  def update(state: State[T, Seq[Event]]) = {
+  private def update(state: State[T, Seq[Event]]): Seq[Event] = {
     val (newModel, events) = state.run(model).value
     log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
     model = newModel
+    events
   }
 
-  def handleSyncCommand(service: SyncStatefulService[T, Command, Seq[Event]], cmd: Command) = {
+  private def handleSyncCommand(service: SyncStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef) = {
     val state: State[T, Seq[Event]] = service.syncFunc(cmd)
-    update(state)
+    val evs = update(state)
+    origin ! evs
   }
 
-  def awaitingCommandComplete(cmd: Command): Receive = {
+  private def awaitingCommandComplete(cmd: Command): Receive = {
     case newCmd: Command => stash()
     case evt: Event =>
       log.warning(s"Handling input events not implemented yet, received: $evt")
@@ -96,21 +97,25 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
       handleRequest(req, sender)
     case cc : CompleteCommand[T] =>
       cc.result.fold(
-        err   => log.error(err, s"error processing command: ${cc.cmd}"),
-        state => update(state)
+        err =>
+          log.error(err, s"error processing command: ${cc.cmd}"),
+        state => {
+          val evs = update(state)
+          cc.origin ! evs
+        }
       )
       context.unbecome()
       unstashAll()
     case ReceiveTimeout => throw new TimeoutException(s"Command Complete Timeout error: $cmd")
   }
 
-  def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_.service).find(_.func.isDefinedAt(cmd))
-  def findServiceForEvent(evt: Event) = processor.eventModifiers.find(_.func.isDefinedAt(evt))
-  def findServiceForQuery(req: Request) = processor.queries.map(_.service).find(_.func.isDefinedAt(req))
+  private def findServiceForCommand(cmd: Command) = processor.props.commandModifiers.map(_.service).find(_.func.isDefinedAt(cmd))
+  private def findServiceForEvent(evt: Event) = processor.props.eventModifiers.find(_.func.isDefinedAt(evt))
+  private def findServiceForQuery(req: Request) = processor.props.queries.map(_.service).find(_.func.isDefinedAt(req))
 
 }
 
 object ProcessorActor {
   def props(processor: Processor[_])(implicit timeout: Timeout): Props = Props(new ProcessorActor(processor, timeout))
-  case class CompleteCommand[S](cmd: Command, result: Either[Throwable, State[S, Seq[Event]]])
+  case class CompleteCommand[S](cmd: Command, result: Either[Throwable, State[S, Seq[Event]]], origin: ActorRef)
 }

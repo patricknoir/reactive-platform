@@ -3,15 +3,12 @@ package org.patricknoir.platform.runtime
 import org.patricknoir.platform.dsl._
 import java.net.InetAddress
 
-import akka.actor.ActorSystem
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
-import org.patricknoir.platform._
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-import akka.stream.ActorMaterializer
-import org.patricknoir.platform.Util._
+import org.patricknoir.platform._
 
 /**
   * Created by patrick on 15/03/2017.
@@ -19,56 +16,55 @@ import org.patricknoir.platform.Util._
 object Boot extends App with LazyLogging {
 
   import io.circe.generic.auto._
+  import Util._
 
-  // TODO: ??? had to take this out from the constructor
-  val counterDescriptor = KeyShardedProcessDescriptor(
-    commandKeyExtractor = {
-      case cmd @ IncrementCounterCmd(id, _) => (id, cmd)
-      case cmd @ DecrementCounterCmd(id, _) => (id, cmd)
-      case cmd @ IncrementCounterIfCmd(id, _, _) => (id, cmd)
-    },
-    eventKeyExtractor = PartialFunction.empty,
-    queryKeyExtractor = {
-      case req @ CounterValueReq(id) => (id, req)
-    },
-    dependencies = Set.empty,
-    hashFunction = _.hashCode,
-    shardSpaceSize = 100
-  )
+  implicit val timeout = Timeout(10 seconds)
 
-  val counterProcessor = new Processor[Int](
+  val counterProcessorDef = ProcessorDef[Int](
     id = "counterProcessor",
     version = Version(1, 0, 0),
-    context = DefaultComponentContextImpl(), // FIXME:
-    descriptor = counterDescriptor,
-    model = 0
-  ) {
-
-    // FIXME: This execution context should not be configured like this !!!
-    import scala.concurrent.ExecutionContext.Implicits.global
-
-    implicit val defaultTimeout = Timeout(10 seconds)
-
-    override def commandModifiers() = Set(
-      command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
-        (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+    descriptor = KeyShardedProcessDescriptor(
+      commandKeyExtractor = {
+        case cmd @ IncrementCounterCmd(id, _) => (id, cmd)
+        case cmd @ DecrementCounterCmd(id, _) => (id, cmd)
+        case cmd @ IncrementCounterIfCmd(id, _, _) => (id, cmd)
       },
-      command("decrementCmd") { (counter: Int, ic: DecrementCounterCmd) =>
-        (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
+      eventKeyExtractor = PartialFunction.empty,
+      queryKeyExtractor = {
+        case req @ CounterValueReq(id) => (id, req)
       },
-      command.async("incrementIfCmd") { (counter: Int, ic: IncrementCounterIfCmd) =>
-        // Following handling is just for demo purposes
-        context.request[CounterValueReq, CounterValueResp]("counterProcessor", CounterValueReq(ic.id)).map(resp =>
-          if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-          else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}")
-        )
-      }
+      dependencies = Set.empty,
+      hashFunction = _.hashCode,
+      shardSpaceSize = 100
+    ),
+    model = 0,
+    propsFactory = (context: ComponentContext) => ProcessorProps(
+      commandModifiers = Set(
+        command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
+          context.log("incrementCmd").info("Called with {}", counter)
+          (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+        },
+        command("decrementCmd") { (counter: Int, ic: DecrementCounterCmd) =>
+          context.log("decrementCmd").info("Called with {}", counter)
+          (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
+//        },
+//        command.async("incrementIfCmd") { (counter: Int, ic: IncrementCounterIfCmd) =>
+//          // Following handling is just for demo purposes
+//          context.request[CounterValueReq, CounterValueResp]("counterProcessor", CounterValueReq(ic.id)).map(resp =>
+//            if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+//            else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}")
+//          )
+        }
+      ),
+      eventModifiers = Set(),
+      queries = Set(
+        request("counterValueReq") { (counter: Int, req: CounterValueReq) =>
+          context.log("counterValueReq").info("Handling request")
+          CounterValueResp(req.id, counter)
+        }
+      )
     )
-    override def eventModifiers() = Set.empty
-    override def queries() = Set(
-      request("counterValueReq") { (counter: Int, req: CounterValueReq) => CounterValueResp(req.id, counter) }
-    )
-  }
+  )
 
   val bc = BoundedContext(
     id = "counterBC",
@@ -80,21 +76,12 @@ object Boot extends App with LazyLogging {
     failureMailboxName = "failures",
     auditMailboxName = "auditing",
     logMailboxName = "logging",
-    components = Set(counterProcessor)
+    componentDefs = Set(counterProcessorDef)
   )
 
-  import Util._
+  val (installed, runtime) = Platform.install(bc)
 
-  implicit val system = ActorSystem("platform")
-  implicit val materializer = ActorMaterializer()
-
-  import system.dispatcher
-
-  implicit val config = PlatformConfig.default
-  implicit val timeout = Timeout(5 seconds)
-
-  val runtime = Platform.install(bc)
-
-  Await.ready(system.whenTerminated, Duration.Inf)
+  Await.ready(runtime, Duration.Inf)
   logger.info(s"Node ${InetAddress.getLocalHost.getHostName} terminated")
+
 }

@@ -1,9 +1,10 @@
 package org.patricknoir.platform.client
 
 import akka.actor.ActorSystem
+import akka.stream.ActorMaterializer
 import akka.util.Timeout
-import org.patricknoir.kafka.reactive.client.config.KafkaRClientSettings
-import org.patricknoir.kafka.reactive.client.{KafkaReactiveClient, ReactiveClient}
+import org.patricknoir.kafka.reactive.client.config.KafkaReactiveClientConfig
+import org.patricknoir.kafka.reactive.client.ReactiveKafkaClient
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
@@ -20,15 +21,20 @@ object SimpleClient extends App {
   import org.patricknoir.platform.Util._
 
   implicit val system = ActorSystem("platformClient")
+  implicit val materializer = ActorMaterializer()
   implicit val timeout = Timeout(100 seconds)
 
   import system.dispatcher
 
-  val client = new KafkaReactiveClient(KafkaRClientSettings.default)
+  val client = new ReactiveKafkaClient(KafkaReactiveClientConfig.default())
 
   var input = ""
 
   while(input != "exit") {
+    val cmd = IncrementCounterCmd("Counter1", 1)
+    val cResp = client.request[IncrementCounterCmd, CounterIncrementedEvt]("kafka:counterBC_1.0.0_commands/incrementCmd", cmd)
+    println("Response is: " + Try(Await.result(cResp, Duration.Inf)))
+
     val req = CounterValueReq("Counter1")
     println(s"Sending request: $req")
     val fResp: Future[CounterValueResp] = client.request[CounterValueReq, CounterValueResp]("kafka:counterBC_1.0.0_requests/counterValueReq", req)

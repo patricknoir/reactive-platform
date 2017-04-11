@@ -1,6 +1,7 @@
 package org.patricknoir.platform.runtime
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.NotUsed
+import akka.actor.{ActorRef, ActorSystem, Terminated}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.kafka.ConsumerMessage.CommittableMessage
 import akka.stream.{ActorMaterializer, Materializer}
@@ -17,10 +18,11 @@ import org.patricknoir.platform.protocol.{Command, Event, Request}
 import org.patricknoir.platform.runtime.actors.ProcessorActor
 import org.patricknoir.platform._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import org.patricknoir.kafka.reactive.server.dsl._
 import akka.pattern.ask
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
+
 import scala.concurrent.duration._
 
 /**
@@ -37,26 +39,28 @@ case class Platform(
 
     Future.successful[Unit](()) //FIXME
 
-
   }
 }
 
 object Platform extends LazyLogging {
-  def install(bc: BoundedContext)(implicit config: PlatformConfig = PlatformConfig.default): Future[Unit] = { //platform(bc)
+  def install(bc: BoundedContext)(implicit config: PlatformConfig = PlatformConfig.default): (Future[Unit], Future[Terminated]) = { //platform(bc)
     import scala.collection.convert.ImplicitConversionsToJava._
-    implicit val akkaConfig = ConfigFactory.load().withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@127.0.0.1:7551")))
+    implicit val akkaConfig = ConfigFactory.load().withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@127.0.0.1:7552")))
     implicit val system = ActorSystem(bc.id, akkaConfig)
     implicit val materializer = ActorMaterializer()
     import system.dispatcher
 
     createTopics(bc, config)
 
-    Platform(
-      processorServers = bc.components
-        .filter(_.isInstanceOf[Processor[_]])
-        .map(component => (component.id -> createProcessorServer(bc, component.asInstanceOf[Processor[_]])))
-        .toMap
-    ).run()
+    (
+      Platform(
+        processorServers = bc.componentDefs
+          .filter(_.isInstanceOf[ProcessorDef[_]])
+          .map(component => (component.id -> createProcessorServer(bc, component.asInstanceOf[ProcessorDef[_]])))
+          .toMap
+      ).run(),
+      system.whenTerminated
+    )
   }
 
   private def createTopics(bc: BoundedContext, config: PlatformConfig) = {
@@ -67,7 +71,7 @@ object Platform extends LazyLogging {
 
     val zkUtils = ZkUtils(config.zookeeperHosts.mkString(" "), 10000, 10000, false)
 
-    val mailboxPrefix = s"${bc.id}_${bc.version.formattedString}_"
+    val mailboxPrefix = s"${bc.id}_${bc.version.toString}_"
 
     (bc.requestMailboxName :: bc.responseMailboxName :: bc.commandMailboxName :: bc.eventMailboxName :: bc.failureMailboxName :: bc.auditMailboxName :: bc.logMailboxName :: Nil).map( mailboxPrefix + _ ).foreach(createMailbox)
 
@@ -81,9 +85,13 @@ object Platform extends LazyLogging {
     }
   }
 
-  def createProcessorServer(bc: BoundedContext, processor: Processor[_])(implicit system: ActorSystem, config: PlatformConfig): ProcessorServer = {
+  def createProcessorServer(bc: BoundedContext, processorProps: ProcessorDef[_])(implicit system: ActorSystem, config: PlatformConfig): ProcessorServer = {
     import system.dispatcher
     implicit val timeout = config.serverDefaultTimeout
+
+    val processorContext = DefaultComponentContextImpl()
+
+    val processor: Processor[_] = processorProps.instantiate(processorContext)
 
     val descriptor = processor.descriptor.asInstanceOf[KeyShardedProcessDescriptor]
     val extractIdFunction: PartialFunction[Any, (String, Any)] = {
@@ -101,23 +109,24 @@ object Platform extends LazyLogging {
       extractShardId = extractShardIdFunction
     )
 
-    val groupName = bc.id + "_" + bc.version.formattedString
-    val topicPrefix = bc.id + "_" + bc.version.formattedString + "_"
+    val groupName = bc.id + "_" + bc.version.toString
+    val topicPrefix = bc.id + "_" + bc.version.toString + "_"
     val commandTopic = topicPrefix + bc.commandMailboxName
     val requestTopic = topicPrefix + bc.requestMailboxName
+    val eventsTopic = topicPrefix + bc.eventMailboxName
 
     val commandSource = ReactiveKafkaSource.atLeastOnce(commandTopic, config.messageFabricServers, topicPrefix + bc.commandMailboxName + "_consumer", groupName)
     val requestSource = ReactiveKafkaSource.atLeastOnce(requestTopic, config.messageFabricServers, topicPrefix + bc.requestMailboxName + "_consumer", groupName)
 
-
-    val commandFlow = Flow.fromFunction[(CommittableMessage[String, String], Future[KafkaResponseEnvelope]), (CommittableMessage[String, String], Future[KafkaResponseEnvelope])] { case (c, fResp) =>
-      (c, fResp.map(_.copy(replyTo = bc.eventMailboxName)))
+    val commandFlow = Flow[(CommittableMessage[String, String], Future[KafkaResponseEnvelope])].map{ case (c, fResp) =>
+      (c, fResp.map(_.copy(replyTo = eventsTopic)))
     }
+
     val commandSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers, 4, 10, 1 second)
     val responseSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers, 4, 10, 1 second)
 
-    val cmdRS = commandSource ~> createCommandRoute(processor.commandModifiers, server) ~> (commandFlow to commandSink)
-    val reqRS = requestSource ~> createRequestRoute(processor.queries, server) ~> responseSink
+    val cmdRS = commandSource ~> createCommandRoute(processor.props.commandModifiers, server) ~> (commandFlow to commandSink)
+    val reqRS = requestSource ~> createRequestRoute(processor.props.queries, server) ~> responseSink
 
     ProcessorServer(
       processor,

@@ -55,7 +55,7 @@ package object dsl {
   object PlatformConfig {
     lazy val default = PlatformConfig.load()
 
-    def load(config: Config = ConfigFactory.load("platform")) = PlatformConfig(
+    def load(config: Config = ConfigFactory.load()) = PlatformConfig(
       messageFabricServers = config.getStringList("platform.fabric.message.hosts").toList.toSet,
       zookeeperHosts = config.getStringList("platform.fabric.message.zookeeper").toList.toSet,
       serverDefaultTimeout = Timeout(config.getDuration("platform.server.timeout").getSeconds, TimeUnit.SECONDS)
