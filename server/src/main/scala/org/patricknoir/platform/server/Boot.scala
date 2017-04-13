@@ -6,7 +6,7 @@ import java.net.InetAddress
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import org.patricknoir.platform._
 
@@ -38,32 +38,36 @@ object Boot extends App with LazyLogging {
       shardSpaceSize = 100
     ),
     model = 0,
-    propsFactory = (context: ComponentContext) => ProcessorProps(
-      commandModifiers = Set(
-        command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
-          context.log("incrementCmd").info("Called with {}", counter)
-          (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-        },
-        command("decrementCmd") { (counter: Int, ic: DecrementCounterCmd) =>
-          context.log("decrementCmd").info("Called with {}", counter)
-          (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
-//        },
-//        command.async("incrementIfCmd") { (counter: Int, ic: IncrementCounterIfCmd) =>
-//          // Following handling is just for demo purposes
-//          context.request[CounterValueReq, CounterValueResp]("counterProcessor", CounterValueReq(ic.id)).map(resp =>
-//            if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-//            else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}")
-//          )
-        }
-      ),
-      eventModifiers = Set(),
-      queries = Set(
-        request("counterValueReq") { (counter: Int, req: CounterValueReq) =>
-          context.log("counterValueReq").info("Handling request")
-          CounterValueResp(req.id, counter)
-        }
+    propsFactory = (context: ComponentContext) =>
+      ProcessorProps(
+        commandModifiers = Set(
+          command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
+            context.log("incrementCmd").info("Called with {}", counter)
+            (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+          },
+          command("decrementCmd") { (counter: Int, ic: DecrementCounterCmd) =>
+            context.log("decrementCmd").info("Called with {}", counter)
+            (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
+          },
+          command.async("incrementIfCmd")(
+            timeout = Timeout(10 seconds),
+            modifier = (counter: Int, ic: IncrementCounterIfCmd) => {
+              // Following handling is just for demo purposes
+              context.request[CounterValueReq, CounterValueResp]("counterProcessor", CounterValueReq(ic.id)).map(resp =>
+                if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+                else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}") // This is the same as failing the future
+              )
+            }
+          )
+        ),
+        eventModifiers = Set(),
+        queries = Set(
+          request("counterValueReq") { (counter: Int, req: CounterValueReq) =>
+            context.log("counterValueReq").info("Handling request")
+            CounterValueResp(req.id, counter)
+          }
+        )
       )
-    )
   )
 
   val bc = BoundedContext(

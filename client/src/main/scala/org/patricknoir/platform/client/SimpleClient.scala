@@ -31,8 +31,8 @@ object SimpleClient extends App {
   var input = ""
 
   while(input != "exit") {
-    val cmd = IncrementCounterCmd("Counter1", 1)
-    val cResp = client.request[IncrementCounterCmd, CounterIncrementedEvt]("kafka:counterBC_1.0.0_commands/incrementCmd", cmd)
+    val cmd = IncrementCounterIfCmd("Counter1", 1, 0)
+    val cResp = client.request[IncrementCounterIfCmd, CounterIncrementedEvt]("kafka:counterBC_1.0.0_commands/incrementIfCmd", cmd)
     println("Response is: " + Try(Await.result(cResp, Duration.Inf)))
 
     val req = CounterValueReq("Counter1")

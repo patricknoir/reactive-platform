@@ -7,7 +7,7 @@ import cats.data.State
 import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{Await, Future}
 import scala.reflect.ClassTag
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -35,12 +35,12 @@ package object dsl {
       StatefulServiceInfo[S, Command, Seq[Event]](StatefulService.sync[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
 
-    def async[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => Future[(S, Seq[E])])(implicit ec: ExecutionContext, timeout: Timeout, ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
-      val fc: PartialFunction[Command, Future[State[S, Seq[Event]]]] = {
+    def async[C <: Command, E <: Event, S](id: String)(timeout: Timeout, modifier: (S, C) => Future[(S, Seq[E])])(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
+      val fc: PartialFunction[Command, State[S, Seq[Event]]] = {
         case cmd: C =>
-          Future(State { init =>
+          State { init =>
             Await.result(modifier(init, cmd), timeout.duration) //can I avoid this blocking?
-          })
+          }
       }
       StatefulServiceInfo[S, Command, Seq[Event]](StatefulService.async[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }

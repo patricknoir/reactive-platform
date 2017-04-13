@@ -2,10 +2,11 @@ package org.patricknoir.platform
 
 import akka.actor.ActorSystem
 import akka.event.{Logging, LoggingAdapter}
+import org.patricknoir.platform.Util.CounterValueResp
 import org.patricknoir.platform.protocol._
 import sun.reflect.generics.reflectiveObjects.NotImplementedException
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Represents the coordinate of a specific server
@@ -213,6 +214,7 @@ sealed trait ComponentContext {
   def log(source: AnyRef): LoggingAdapter
 }
 case class DefaultComponentContextImpl()(implicit system: ActorSystem) extends ComponentContext {
+
   override def request[R <: Request, RR <: Response](target: String, request: R): Future[RR] =
     Future.failed(new NotImplementedException)
 
