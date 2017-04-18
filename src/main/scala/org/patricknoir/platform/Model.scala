@@ -145,9 +145,9 @@ sealed case class Processor[W](
 ) extends Component[W]
 
 case class ProcessorProps[W](
-  commandModifiers: Set[CmdInfo[W]],
-  eventModifiers: Set[Evt[W]],
-  queries: Set[AskInfo[W]]
+  commandModifiers: Set[CmdInfo[W]] = Set.empty[CmdInfo[W]],
+  eventModifiers: Set[Evt[W]] = Set.empty[Evt[W]],
+  queries: Set[AskInfo[W]] = Set.empty[AskInfo[W]]
 ) extends ComponentProps[W]
 
 case class ProcessorDef[W](

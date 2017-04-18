@@ -13,7 +13,7 @@ val commonSettings = Seq(
 val Versions = new {
   val Circe = "0.7.0"
   val Cats = "0.9.0"
-  val ReactiveSystem = "0.3.0"
+  val ReactiveSystem = "0.3.1"
   val Akka = "2.4.17"
   val Kafka = "0.10.2.0"
 }
@@ -72,6 +72,11 @@ val protocol = project.in(file("examples/wallet-system/protocol"))
 
 val walletService = project
   .in(file("examples/wallet-system/service/wallet-service"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(protocol, root)
+
+val walletClient = project.in(file("examples/wallet-client"))
   .settings(commonSettings)
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(protocol, root)

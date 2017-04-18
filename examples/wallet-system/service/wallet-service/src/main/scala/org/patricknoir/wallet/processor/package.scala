@@ -1,8 +1,7 @@
 package org.patricknoir.wallet
 
-import org.patricknoir.platform.{protocol, _}
+import org.patricknoir.platform._
 import org.patricknoir.platform.dsl._
-import org.patricknoir.platform.protocol.{Command, Event}
 import org.patricknoir.wallet.domain.Wallet
 import org.patricknoir.wallet.protocol.command.{CreditCmd, DebitCmd, WalletCreateCmd}
 import org.patricknoir.wallet.protocol.event.{CreditedEvt, DebitedEvt, WalletCreatedEvt}
@@ -15,11 +14,11 @@ import org.patricknoir.wallet.protocol.response.GetBalanceRes
   */
 package object processor {
 
-  val createWalletReducer: CmdInfo[Option[Wallet]] = command("walletCreateCmd") { (optWallet: Option[Wallet], cmd: WalletCreateCmd) =>
+  val createWalletCmd: CmdInfo[Option[Wallet]] = command("walletCreateCmd") { (optWallet: Option[Wallet], cmd: WalletCreateCmd) =>
     (Option(Wallet(cmd.id, cmd.amount, cmd.active)), Seq(WalletCreatedEvt(cmd.id, cmd.amount, cmd.active)))
   }
 
-  val debitWalletReducer: CmdInfo[Option[Wallet]] = command("debitCmd") { (optWallet: Option[Wallet], cmd: DebitCmd) =>
+  val debitWalletCmd: CmdInfo[Option[Wallet]] = command("debitCmd") { (optWallet: Option[Wallet], cmd: DebitCmd) =>
     optWallet.fold(
       throw new RuntimeException(s"Wallet ${cmd.id} does not exist")
     )
@@ -61,14 +60,21 @@ package object processor {
     shardSpaceSize = 100
   )
 
-  val walletProcessor = Processor[Option[Wallet]](
-    id = "wallet-processor",
+  val walletProcessorDef = ProcessorDef[Option[Wallet]](
+    id = "walletProcessor",
     version = Version(1, 0, 0),
     descriptor = shardingDescriptor,
     model = None,
-    commandModifiers = Set(createWalletReducer, debitWalletReducer, creditWalletReducer),
-    eventModifiers = Set.empty,
-    queries = Set(getBalanceReq)
+    propsFactory = _ => ProcessorProps[Option[Wallet]](
+      commandModifiers = Set(
+        createWalletCmd,
+        debitWalletCmd,
+        createWalletCmd
+      ),
+      queries = Set(getBalanceReq)
+    )
+
   )
+
 
 }

@@ -43,9 +43,10 @@ case class Platform(
 }
 
 object Platform extends LazyLogging {
+
   def install(bc: BoundedContext)(implicit config: PlatformConfig = PlatformConfig.default): (Future[Unit], Future[Terminated]) = { //platform(bc)
     import scala.collection.convert.ImplicitConversionsToJava._
-    implicit val akkaConfig = ConfigFactory.load().withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@127.0.0.1:7552")))
+    implicit val akkaConfig = ConfigFactory.load().withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@127.0.0.1:7551")))
     implicit val system = ActorSystem(bc.id, akkaConfig)
     implicit val materializer = ActorMaterializer()
     import system.dispatcher
