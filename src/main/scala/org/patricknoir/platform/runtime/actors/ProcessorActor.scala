@@ -3,7 +3,7 @@ package org.patricknoir.platform.runtime.actors
 import java.util.concurrent.TimeoutException
 
 import akka.actor.{ActorLogging, ActorRef, Props, ReceiveTimeout, Stash, Status}
-import akka.persistence.PersistentActor
+import akka.persistence.{PersistentActor, RecoveryCompleted}
 import akka.util.Timeout
 import cats.data.State
 import org.patricknoir.platform.{AsyncStatefulService, Processor, SyncStatefulService}
@@ -36,16 +36,21 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     case other => log.warning(s"Unhandled message: $other")
   }
 
+  var isWaitingComplete: Option[WaitingComplete] = None
+
   override def receiveRecover: Receive = {
     case eventRecover: EventRecover[T] =>
       val (newState, _) = eventRecover.stateM.run(model).value
       model = newState
-      context.become(receiveCommand)
-    case WaitingComplete(cmd, origin) =>
-      context.setReceiveTimeout(timeout.duration)
-      context.become(awaitingCommandComplete(cmd, origin))
-    case ReceiveTimeout =>
-      context.become(receiveCommand) //FIXME: this is to avoid deadlocks on awaitingCommandComplete
+      isWaitingComplete = None
+    case wc: WaitingComplete =>
+      isWaitingComplete = Some(wc)
+    case RecoveryCompleted =>
+      isWaitingComplete.map {
+        case WaitingComplete(cmd, origin) =>
+          context.setReceiveTimeout(timeout.duration)
+          context.become(awaitingCommandComplete(cmd, origin))
+      }
     case msg => log.warning(s"Recovery message received: $msg")
   }
 
