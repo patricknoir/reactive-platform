@@ -78,9 +78,6 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
           log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
           updateStateAndReply((newModel, events), origin)
         }
-//      val (newModel, events) = state.run(model).value
-//      log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
-//      updateStateAndReply((newModel, events), origin)
     }.recover { case err: Throwable =>
       reportErrorAndReply(err, cmd, origin)
     }
