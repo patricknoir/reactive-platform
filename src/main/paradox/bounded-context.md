@@ -13,9 +13,9 @@ In order to be `reactive` the API is based on asynchronous message driven commun
 To define a `Bounded Context` we need to describe:
  
  - an internal model
- - micro-services to work on the model
+ - micro-services to work on the model (_Processors_ and _Views_)
  - protocol to expose the functionality and/or interact with other systems
-  
+
   
 ## Bounded Context Project Structure
 

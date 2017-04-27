@@ -1,6 +1,5 @@
 package org.patricknoir.platform.runtime
 
-import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, Terminated}
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.kafka.ConsumerMessage.CommittableMessage
@@ -8,8 +7,6 @@ import akka.stream.{ActorMaterializer, Materializer}
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
-import kafka.admin.TopicCommand
-import kafka.utils.ZkUtils
 import org.patricknoir.kafka.reactive.common.{KafkaResponseEnvelope, ReactiveDeserializer, ReactiveSerializer}
 import org.patricknoir.kafka.reactive.server.streams.{ReactiveKafkaSink, ReactiveKafkaSource}
 import org.patricknoir.kafka.reactive.server.{ReactiveRoute, ReactiveService, ReactiveSystem}
@@ -24,6 +21,7 @@ import akka.pattern.ask
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 
 import scala.concurrent.duration._
+import scala.util.Try
 
 /**
   * Created by patrick on 26/03/2017.
@@ -45,54 +43,79 @@ case class Platform(
 object Platform extends LazyLogging {
 
   def install(bc: BoundedContext)(implicit config: PlatformConfig = PlatformConfig.default): (Future[Unit], Future[Terminated]) = { //platform(bc)
+
     import scala.collection.convert.ImplicitConversionsToJava._
-    implicit val akkaConfig = ConfigFactory.load().withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@127.0.0.1:7551")))
+    val reference = ConfigFactory.load()
+    val serverHost = reference.getString("akka.remote.netty.tcp.hostname")
+    val serverPort = reference.getInt("akka.remote.netty.tcp.port")
+    implicit val akkaConfig = reference.withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@$serverHost:$serverPort")))
     implicit val system = ActorSystem(bc.id, akkaConfig)
     implicit val materializer = ActorMaterializer()
     import system.dispatcher
 
-    createTopics(bc, config)
+    implicit val timeout = config.serverDefaultTimeout
+
+    val context = new DefaultComponentContextImpl(bc)
+    val registry = new DefaultRegistryImpl(context)
+    val messageFabric = MessageFabric.create(config.zookeeperHosts.mkString(","), config.zkMinBackOff, config.zkMaxBackOff)
+
+    val result = for {
+      info <- Future.fromTry(registry.register(bc))
+      _ <- Future.sequence(Seq(
+        bc.fullCommandMailboxName,
+        bc.fullEventMailboxName,
+        bc.fullRequestMailboxName,
+        bc.fullFailureMailboxName,
+        bc.fullResponseMailboxName,
+        bc.fullLogMailboxName
+      ).map(messageFabric.createMailbox))
+    } yield info
+
+    Try(Await.ready(result, Duration.Inf))
 
     (
       Platform(
         processorServers = bc.componentDefs
           .filter(_.isInstanceOf[ProcessorDef[_]])
-          .map(component => (component.id -> createProcessorServer(bc, component.asInstanceOf[ProcessorDef[_]])))
+          .map(component => (component.id -> createProcessorServer(context, bc, component.asInstanceOf[ProcessorDef[_]])))
           .toMap
       ).run(),
       system.whenTerminated
     )
   }
 
-  private def createTopics(bc: BoundedContext, config: PlatformConfig) = {
-    import kafka.admin.AdminUtils
-    import org.I0Itec.zkclient.ZkClient
+  def uninstall(bc: BoundedContext)(implicit config: PlatformConfig) = {
+    import scala.collection.convert.ImplicitConversionsToJava._
+    implicit val akkaConfig = ConfigFactory.load().withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@127.0.0.1:7551")))
+    implicit val system = ActorSystem(bc.id, akkaConfig)
 
-    TopicCommand
+    import system.dispatcher
 
-    val zkUtils = ZkUtils(config.zookeeperHosts.mkString(" "), 10000, 10000, false)
+    implicit val timeout = config.serverDefaultTimeout
 
-    val mailboxPrefix = s"${bc.id}_${bc.version.toString}_"
+    val context = new DefaultComponentContextImpl(bc)
+    val registry = new DefaultRegistryImpl(context)
+    val messageFabric = MessageFabric.create(config.zookeeperHosts.mkString(","), config.zkMinBackOff, config.zkMaxBackOff)
 
-    (bc.requestMailboxName :: bc.responseMailboxName :: bc.commandMailboxName :: bc.eventMailboxName :: bc.failureMailboxName :: bc.auditMailboxName :: bc.logMailboxName :: Nil).map( mailboxPrefix + _ ).foreach(createMailbox)
 
-    zkUtils.close()
-
-    def createMailbox(mailboxName: String) {
-      logger.info(s"Creating mailbox: $mailboxName")
-      if(!AdminUtils.topicExists(zkUtils, mailboxName))
-        AdminUtils.createTopic(zkUtils, mailboxName, 1, 1)//.createTopic(zkClient, mailboxName, 1, 1, new Nothing)
-      logger.info(s"Mailbox: $mailboxName created")
-    }
+    for {
+      _ <- Future.successful(registry.unregister(bc.id, bc.version))
+      _ <- Future.sequence(Seq(
+        bc.fullCommandMailboxName,
+        bc.fullEventMailboxName,
+        bc.fullRequestMailboxName,
+        bc.fullFailureMailboxName,
+        bc.fullResponseMailboxName,
+        bc.fullLogMailboxName
+      ).map(messageFabric.createMailbox))
+    } yield ()
   }
 
-  def createProcessorServer(bc: BoundedContext, processorProps: ProcessorDef[_])(implicit system: ActorSystem, config: PlatformConfig): ProcessorServer = {
+  private def createProcessorServer(ctx: ComponentContext, bc: BoundedContext, processorProps: ProcessorDef[_])(implicit system: ActorSystem, config: PlatformConfig): ProcessorServer = {
     import system.dispatcher
     implicit val timeout = config.serverDefaultTimeout
 
-    val processorContext = DefaultComponentContextImpl()
-
-    val processor: Processor[_] = processorProps.instantiate(processorContext)
+    val processor: Processor[_] = processorProps.instantiate(ctx)
 
     val descriptor = processor.descriptor.asInstanceOf[KeyShardedProcessDescriptor]
     val extractIdFunction: PartialFunction[Any, (String, Any)] = {
@@ -112,15 +135,12 @@ object Platform extends LazyLogging {
 
     val groupName = bc.id + "_" + bc.version.toString
     val topicPrefix = bc.id + "_" + bc.version.toString + "_"
-    val commandTopic = topicPrefix + bc.commandMailboxName
-    val requestTopic = topicPrefix + bc.requestMailboxName
-    val eventsTopic = topicPrefix + bc.eventMailboxName
 
-    val commandSource = ReactiveKafkaSource.atLeastOnce(commandTopic, config.messageFabricServers, topicPrefix + bc.commandMailboxName + "_consumer", groupName)
-    val requestSource = ReactiveKafkaSource.atLeastOnce(requestTopic, config.messageFabricServers, topicPrefix + bc.requestMailboxName + "_consumer", groupName)
+    val commandSource = ReactiveKafkaSource.atLeastOnce(bc.fullCommandMailboxName, config.messageFabricServers, topicPrefix + bc.commandMailboxName + "_consumer", groupName)
+    val requestSource = ReactiveKafkaSource.atLeastOnce(bc.fullRequestMailboxName, config.messageFabricServers, topicPrefix + bc.requestMailboxName + "_consumer", groupName)
 
     val commandFlow = Flow[(CommittableMessage[String, String], Future[KafkaResponseEnvelope])].map{ case (c, fResp) =>
-      (c, fResp.map(_.copy(replyTo = eventsTopic)))
+      (c, fResp.map(_.copy(replyTo = bc.fullEventMailboxName)))
     }
 
     val commandSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers, 4, 10, 1 second)

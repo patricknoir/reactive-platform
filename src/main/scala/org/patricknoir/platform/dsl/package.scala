@@ -12,6 +12,7 @@ import scala.reflect.ClassTag
 import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.collection.convert.ImplicitConversionsToScala._
+import scala.concurrent.duration.FiniteDuration
 
 /**
   * Created by patrick on 20/03/2017.
@@ -49,7 +50,9 @@ package object dsl {
   case class PlatformConfig(
     messageFabricServers: Set[String],
     zookeeperHosts: Set[String],
-    serverDefaultTimeout: Timeout
+    serverDefaultTimeout: Timeout,
+    zkMinBackOff: FiniteDuration,
+    zkMaxBackOff: FiniteDuration
   )
 
   object PlatformConfig {
@@ -58,7 +61,9 @@ package object dsl {
     def load(config: Config = ConfigFactory.load()) = PlatformConfig(
       messageFabricServers = config.getStringList("platform.fabric.message.hosts").toList.toSet,
       zookeeperHosts = config.getStringList("platform.fabric.message.zookeeper").toList.toSet,
-      serverDefaultTimeout = Timeout(config.getDuration("platform.server.timeout").getSeconds, TimeUnit.SECONDS)
+      serverDefaultTimeout = Timeout(config.getDuration("platform.server.timeout").getSeconds, TimeUnit.SECONDS),
+      zkMinBackOff = FiniteDuration(config.getDuration("platform.fabric.message.backoff.min").getSeconds, TimeUnit.SECONDS),
+      zkMaxBackOff = FiniteDuration(config.getDuration("platform.fabric.message.backoff.max").getSeconds, TimeUnit.SECONDS)
     )
   }
 

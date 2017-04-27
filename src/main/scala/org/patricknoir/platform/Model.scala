@@ -2,22 +2,22 @@ package org.patricknoir.platform
 
 import akka.actor.ActorSystem
 import akka.event.{Logging, LoggingAdapter}
+import akka.stream.ActorMaterializer
+import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
+import org.patricknoir.kafka.reactive.client.ReactiveKafkaClient
+import org.patricknoir.kafka.reactive.client.config.KafkaReactiveClientConfig
+import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSerializer}
 import org.patricknoir.platform.Util.CounterValueResp
+import org.patricknoir.platform.dsl.PlatformConfig
 import org.patricknoir.platform.protocol._
+import org.patricknoir.platform.runtime.{BoundedContextInfo, DefaultRegistryImpl, MessageFabric}
 import sun.reflect.generics.reflectiveObjects.NotImplementedException
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.reflect.ClassTag
+import scala.util.Try
 
-/**
-  * Represents the coordinate of a specific server
-  * which lives under a bounded context and inside
-  * a specific component.
-  * @param boundedContextId identifier for the bounded-context
-  * @param componentId identifier for the component which owns the service
-  * @param serviceId the specific service id
-  *
-  */
-case class ServiceURL(boundedContextId: String, componentId: String, serviceId: String)
+case class ServiceURL(bcId: String, version: Version, messageName: String)
 
 /**
   * A bounded context is a self contained system which delivers
@@ -46,7 +46,15 @@ case class BoundedContext(
   auditMailboxName: String = "audits",
   logMailboxName: String = "logs",
   componentDefs: Set[ComponentDef[_]]
-)
+) {
+  private val prefix = s"${id}_${version}_"
+  val fullRequestMailboxName: String = prefix + requestMailboxName
+  val fullResponseMailboxName: String = prefix + responseMailboxName
+  val fullCommandMailboxName: String = prefix + commandMailboxName
+  val fullEventMailboxName: String = prefix + eventMailboxName
+  val fullFailureMailboxName: String = prefix + failureMailboxName
+  val fullLogMailboxName: String = prefix + logMailboxName
+}
 
 /**
   * DESCRIPTORS
@@ -93,6 +101,13 @@ case class Version(
   patch: Int
 ) {
   override def toString = s"$major.$minor.$patch"
+}
+
+object Version {
+  def fromString(versionStr: String): Try[Version] = Try {
+    val parts = versionStr.split(".")
+    Version(parts(0).toInt, parts(1).toInt, parts(2).toInt)
+  }
 }
 
 sealed trait ComponentDef[T] {
@@ -208,15 +223,53 @@ case class ViewDef[R](
 }
 
 sealed trait ComponentContext {
-  def request[R <: Request, RR <: Response](target: String, request: R): Future[RR]
+
+  def request[R <: Request, RR <: Response](target: ServiceURL, request: R)(implicit serializer: ReactiveSerializer[R], deserializer: ReactiveDeserializer[RR], ctRR: ClassTag[RR]): Future[RR]
+  def send[C <: Command](target: ServiceURL, cmd: C)(implicit serializer: ReactiveSerializer[C]): Future[Unit]
 
   def log(): LoggingAdapter
   def log(source: AnyRef): LoggingAdapter
 }
-case class DefaultComponentContextImpl()(implicit system: ActorSystem) extends ComponentContext {
+case class DefaultComponentContextImpl(bc: BoundedContext)(implicit system: ActorSystem, config: PlatformConfig) extends ComponentContext {
 
-  override def request[R <: Request, RR <: Response](target: String, request: R): Future[RR] =
-    Future.failed(new NotImplementedException)
+  import system.dispatcher
+
+  private implicit val timeout =  config.serverDefaultTimeout
+
+  private val registry = new DefaultRegistryImpl(this)
+
+  private implicit val materializer = ActorMaterializer()
+
+  private var destinationCache = Map.empty[ServiceURL, BoundedContextInfo]
+
+  import scala.collection.JavaConverters._
+
+  private val clientConfig = KafkaReactiveClientConfig(ConfigFactory.load().getConfig("reactive.system.client.kafka")
+    .withValue("response-topic", ConfigValueFactory.fromAnyRef(bc.fullResponseMailboxName))
+    .withValue("consumer.bootstrap-servers", ConfigValueFactory.fromIterable(config.messageFabricServers.asJava))
+    .withValue("consumer.group-id", ConfigValueFactory.fromAnyRef(s"${bc.id}_${bc.version}"))
+    .withValue("producer.bootstrap-servers", ConfigValueFactory.fromIterable(config.messageFabricServers.asJava))
+  )
+
+  private val client = new ReactiveKafkaClient(clientConfig)
+
+  override def request[R <: Request, RR <: Response](target: ServiceURL, request: R)(implicit serializer: ReactiveSerializer[R], deserializer: ReactiveDeserializer[RR], ctRR: ClassTag[RR]): Future[RR] = for {
+    destination <- Future.fromTry(resolveRequestDestination(target))
+    response <- client.request(s"kafka:${destination.requests}/${target.messageName}", request)
+  } yield response
+
+  override def send[C <: Command](target: ServiceURL, cmd: C)(implicit serializer: ReactiveSerializer[C]): Future[Unit] = for {
+    destination <- Future.fromTry(resolveRequestDestination(target))
+    _ <- client.send(s"kafka:${destination.inputCommands}/${target.messageName}", cmd, true)
+  } yield ()
+
+  private def resolveRequestDestination(target: ServiceURL): Try[BoundedContextInfo] = Try {
+    destinationCache.getOrElse(target, {
+      val dest = registry.get(target.bcId, target.version).get
+      destinationCache += (target -> dest)
+      dest
+    })
+  }
 
   override def log(): LoggingAdapter = system.log
   override def log(source: AnyRef): LoggingAdapter = Logging.getLogger(system.eventStream, source)

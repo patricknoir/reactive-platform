@@ -2,6 +2,9 @@ import sbt.Keys.organization
 
 name := "reactive-platform"
 
+resolvers ++= Seq(
+  "bintray" at "http://jcenter.bintray.com"
+)
 
 val commonSettings = Seq(
   version := "1.0.0-SNAPSHOT",
@@ -34,7 +37,8 @@ val commonDependencies = Seq(
   "ch.qos.logback"                  %  "logback-classic"            % "1.1.3",
   "org.iq80.leveldb"                %  "leveldb"                    % "0.7",
   "org.fusesource.leveldbjni"       %  "leveldbjni-all"             % "1.8",
-  "org.apache.kafka"                %  "kafka_2.12"                 % Versions.Kafka
+  "org.apache.kafka"                %%  "kafka"                     % Versions.Kafka,
+  "com.orbitz.consul"               % "consul-client"               % "0.14.0"
 )
 
 

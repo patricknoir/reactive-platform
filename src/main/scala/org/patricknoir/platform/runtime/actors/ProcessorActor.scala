@@ -5,9 +5,10 @@ import java.util.concurrent.TimeoutException
 import akka.actor.{ActorLogging, ActorRef, Props, ReceiveTimeout, Stash, Status}
 import akka.persistence.PersistentActor
 import akka.util.Timeout
+import cats.data.State
 import org.patricknoir.platform.{AsyncStatefulService, Processor, SyncStatefulService}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
-import org.patricknoir.platform.runtime.actors.ProcessorActor.CompleteCommand
+import org.patricknoir.platform.runtime.actors.ProcessorActor.{CompleteCommand, EventRecover}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.Duration
@@ -36,6 +37,9 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
   }
 
   override def receiveRecover: Receive = {
+    case eventRecover: EventRecover[T] =>
+      val (newState, _) = eventRecover.stateM.run(model).value
+      model = newState
     case msg => log.warning(s"Recovery message received: $msg")
   }
 
@@ -67,10 +71,16 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
   private def handleSyncCommand(svc: SyncStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef) = {
     Try {
       svc.func(cmd)
-    }.map { state =>
-      val (newModel, events) = state.run(model).value
-      log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
-      updateStateAndReply((newModel, events), origin)
+    }.map { stateM =>
+        persist(EventRecover(stateM)) { event =>
+          val state = event.stateM
+          val (newModel, events) = state.run(model).value
+          log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
+          updateStateAndReply((newModel, events), origin)
+        }
+//      val (newModel, events) = state.run(model).value
+//      log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
+//      updateStateAndReply((newModel, events), origin)
     }.recover { case err: Throwable =>
       reportErrorAndReply(err, cmd, origin)
     }
@@ -110,9 +120,15 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
       if (cc.cmd == cmd) { // FIXME: Safer comparison ???
         cc.result.fold(
           err => reportErrorAndReply(err, cc.cmd, origin),
-          stateAndEvents => updateStateAndReply(stateAndEvents, cc.origin)
+          stateAndEvents => {
+            val (s, evts) = stateAndEvents
+            val eventRecover = EventRecover(State(_ => (s, evts)))
+            persist(eventRecover) { _ =>
+              updateStateAndReply(stateAndEvents, cc.origin)
+              restoreBehaviour()
+            }
+          }
         )
-        restoreBehaviour()
       } else {
         // This can happen when a previous command timed out
         log.warning("Received CompleteCommand for command {} while awaiting for {}, skipping ...", cc.cmd, cmd)
@@ -137,4 +153,6 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
 object ProcessorActor {
   def props(processor: Processor[_])(implicit timeout: Timeout): Props = Props(new ProcessorActor(processor, timeout))
   case class CompleteCommand[S](cmd: Command, result: Either[Throwable, (S, Seq[Event])], origin: ActorRef)
+
+  case class EventRecover[S](stateM: State[S, Seq[Event]])
 }
