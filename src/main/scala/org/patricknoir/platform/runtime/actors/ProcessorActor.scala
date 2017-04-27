@@ -8,7 +8,7 @@ import akka.util.Timeout
 import cats.data.State
 import org.patricknoir.platform.{AsyncStatefulService, Processor, SyncStatefulService}
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
-import org.patricknoir.platform.runtime.actors.ProcessorActor.{CompleteCommand, EventRecover}
+import org.patricknoir.platform.runtime.actors.ProcessorActor.{CompleteCommand, EventRecover, WaitingComplete}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.Duration
@@ -40,6 +40,12 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     case eventRecover: EventRecover[T] =>
       val (newState, _) = eventRecover.stateM.run(model).value
       model = newState
+      context.become(receiveCommand)
+    case WaitingComplete(cmd, origin) =>
+      context.setReceiveTimeout(timeout.duration)
+      context.become(awaitingCommandComplete(cmd, origin))
+    case ReceiveTimeout =>
+      context.become(receiveCommand) //FIXME: this is to avoid deadlocks on awaitingCommandComplete
     case msg => log.warning(s"Recovery message received: $msg")
   }
 
@@ -92,8 +98,10 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     }.onComplete(r =>
       self ! CompleteCommand[T](cmd, r.toEither, origin)
     )
-    context.setReceiveTimeout(timeout.duration)
-    context.become(awaitingCommandComplete(cmd, origin), discardOld = false)
+    persist(WaitingComplete(cmd, origin)) { _ =>
+      context.setReceiveTimeout(timeout.duration)
+      context.become(awaitingCommandComplete(cmd, origin), discardOld = true)
+    }
   }
 
   private def reportErrorAndReply(err: Throwable, cmd: Command, origin: ActorRef) = {
@@ -119,7 +127,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
           err => reportErrorAndReply(err, cc.cmd, origin),
           stateAndEvents => {
             val (s, evts) = stateAndEvents
-            val eventRecover = EventRecover(State(_ => (s, evts)))
+            val eventRecover = EventRecover[T](State[T, Seq[Event]](_ => (s, evts)))
             persist(eventRecover) { _ =>
               updateStateAndReply(stateAndEvents, cc.origin)
               restoreBehaviour()
@@ -136,7 +144,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
   }
 
   private def restoreBehaviour() = {
-    context.unbecome()
+    context.become(receiveCommand)
     context.setReceiveTimeout(Duration.Undefined)
     unstashAll()
   }
@@ -152,4 +160,6 @@ object ProcessorActor {
   case class CompleteCommand[S](cmd: Command, result: Either[Throwable, (S, Seq[Event])], origin: ActorRef)
 
   case class EventRecover[S](stateM: State[S, Seq[Event]])
+  case class WaitingComplete(cmd: Command, origin: ActorRef)
+  case object Processing
 }
