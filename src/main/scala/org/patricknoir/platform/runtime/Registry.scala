@@ -15,6 +15,12 @@ import scala.util.Try
 case class BoundedContextInfo(
   id: String,
   version: Version,
+  commandMailbox: String,
+  inputEventMailbox: String,
+  outputEventMailbox: String,
+  requestMailbox: String,
+  failureMailbox: String,
+  loggingMailbox: String,
   inputCommands: Set[String],
   inputEvents: Set[String],
   requests: Set[String],
@@ -51,7 +57,20 @@ class DefaultRegistryImpl(context: ComponentContext) extends Registry {
     }
 
     //FIXME: add input events
-    BoundedContextInfo(id, version, commands, Set.empty, requests, services)
+    BoundedContextInfo(
+      id,
+      version,
+      bc.fullCommandMailboxName,
+      "TBD",
+      bc.fullEventMailboxName,
+      bc.fullRequestMailboxName,
+      bc.fullFailureMailboxName,
+      bc.fullLogMailboxName,
+      commands,
+      Set.empty,
+      requests,
+      services
+    )
   }
 
   private def extractPropNames(component: ComponentDef[_]): (Set[String], Set[String]) = component match {

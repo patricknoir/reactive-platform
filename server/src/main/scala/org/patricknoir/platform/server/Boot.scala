@@ -53,7 +53,7 @@ object Boot extends App with LazyLogging {
             timeout = Timeout(10 seconds),
             modifier = (counter: Int, ic: IncrementCounterIfCmd) => {
               // Following handling is just for demo purposes
-              context.request[CounterValueReq, CounterValueResp]("counterProcessor", CounterValueReq(ic.id)).map(resp =>
+              context.request[CounterValueReq, CounterValueResp](ServiceURL("counterBC", Version(1, 0, 0), "counterProcessor"), CounterValueReq(ic.id)).map(resp =>
                 if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
                 else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}") // This is the same as failing the future
               )

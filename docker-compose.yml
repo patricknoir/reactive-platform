@@ -24,6 +24,14 @@ services:
       # KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
     depends_on:
       - zoo1
+  consul1:
+    image: consul
+    hostname: consul1
+    ports:
+      - "8500:8500"
+      - "8300:8300"
+      - "8600:8600"
+    # command: [consul, agent, -dev, -ui]
   server:
     image: patricknoir/server:1.0.0-SNAPSHOT
     ports:
@@ -33,3 +41,4 @@ services:
     depends_on:
       - kafka1
       - zoo1
+      - consul1
