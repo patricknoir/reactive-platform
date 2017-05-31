@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html class="no-js" lang="en">
+
+<head>
+<title>Reactive Bounded Context</title>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="description" content='documentation'/>
+<link href="https://fonts.googleapis.com/css?family=Roboto:100normal,100italic,300normal,300italic,400normal,400italic,500normal,500italic,700normal,700italic,900normal,900italicc" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="lib/jquery/jquery.min.js"></script>
+<script type="text/javascript" src="js/page.js"></script>
+<link rel="stylesheet" type="text/css" href="lib/normalize.css/normalize.css"/>
+<link rel="stylesheet" type="text/css" href="lib/foundation/dist/foundation.min.css"/>
+<link rel="stylesheet" type="text/css" href="css/page.css"/>
+
+<!--
+<link rel="shortcut icon" href="images/favicon.ico" />
+-->
+</head>
+
+<body>
+<div class="off-canvas-wrapper">
+<div class="off-canvas-wrapper-inner" data-off-canvas-wrapper>
+
+<div class="off-canvas position-left" id="off-canvas-menu" data-off-canvas>
+<nav class="off-canvas-nav">
+<div class="nav-home">
+<a href="bounded-context.html" class="active">
+<span class="home-icon">⌂</span>Reactive Bounded Context
+</a>
+<div class="version-number">
+1.0.0*
+</div>
+</div>
+<div class="nav-toc">
+<ul>
+</ul>
+</div>
+
+</nav>
+</div>
+
+<div class="off-canvas-content" data-off-canvas-content>
+
+<header class="site-header expanded row">
+<div class="small-12 column">
+<a href="#" class="off-canvas-toggle hide-for-medium" data-toggle="off-canvas-menu"><svg class="svg-icon svg-icon-menu" version="1.1" id="Menu" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 20 20" enable-background="new 0 0 20 20" xml:space="preserve"> <path class="svg-icon-menu-path" fill="#53CDEC" d="M16.4,9H3.6C3.048,9,3,9.447,3,10c0,0.553,0.048,1,0.6,1H16.4c0.552,0,0.6-0.447,0.6-1C17,9.447,16.952,9,16.4,9z M16.4,13
+H3.6C3.048,13,3,13.447,3,14c0,0.553,0.048,1,0.6,1H16.4c0.552,0,0.6-0.447,0.6-1C17,13.447,16.952,13,16.4,13z M3.6,7H16.4
+C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.048,7,3.6,7z"/></svg>
+</a>
+<div class="title"><a href="bounded-context.html" class="active">Reactive Bounded Context</a></div>
+
+<!--
+<a href="https://www.example.com" class="logo show-for-medium">logo</a>
+-->
+</div>
+</header>
+
+<div class="expanded row">
+
+<div class="medium-3 large-2 show-for-medium column">
+<nav class="site-nav">
+<div class="nav-home">
+<a href="bounded-context.html" class="active">
+<span class="home-icon">⌂</span>Reactive Bounded Context
+</a>
+<div class="version-number">
+1.0.0*
+</div>
+</div>
+<div class="nav-toc">
+<ul>
+</ul>
+</div>
+
+</nav>
+</div>
+
+<div class="small-12 medium-9 large-10 column">
+<section class="site-content">
+
+<div class="page-header row">
+<div class="medium-12 show-for-medium column">
+</div>
+</div>
+
+<div class="page-content row">
+<div class="small-12 large-9 column" id="docs">
+<h1><a href="#reactive-bounded-context" name="reactive-bounded-context" class="anchor"><span class="anchor-link"></span></a>Reactive Bounded Context</h1>
+<h2><a href="#introduction" name="introduction" class="anchor"><span class="anchor-link"></span></a>Introduction</h2>
+<p>A <code>Bounded Context</code> is a self contained system which masters its internal model and implements some business functionality.</p>
+<p>A <code>Bounded Context</code> can interact with other components only through a well defined protocol of communication which is effectively its <code>API</code>.</p>
+<p>In order to be <code>reactive</code> the API is based on asynchronous message driven communication, this approach will give us several advantages  which have been described <a href="TODO">here</a>.</p>
+<p>To define a <code>Bounded Context</code> we need to describe:</p>
+<ul>
+  <li>an internal model</li>
+  <li>micro-services to work on the model (_Processors_ and <em>Views</em>)</li>
+  <li>protocol to expose the functionality and/or interact with other systems</li>
+</ul>
+<h2><a href="#bounded-context-project-structure" name="bounded-context-project-structure" class="anchor"><span class="anchor-link"></span></a>Bounded Context Project Structure</h2>
+<p>Each <code>Bounded Context</code> is a root project identified by a <code>name</code> and <code>version</code>. i.e.:</p>
+<blockquote>
+  <p>Bounded Context: name = <code>account-system</code>, version = <code>1.0.0</code></p>
+  <p><strong>NOTE</strong>: by convention all the bounded context name should have a suffix <code>system</code>, this is preferred to others like <code>manager</code>.</p>
+</blockquote>
+<p>A <code>Bounded Context</code> project has always a sub-module called <code>protocol</code> as a separate entity. This is where we define all the messages in order to interact with this specific <code>Bounded Context</code>.</p>
+<ul>
+  <li>[bounded-context]</li>
+  <li>protocol</li>
+  <li>service
+    <ul>
+      <li>[service-name]</li>
+    </ul>
+  </li>
+</ul>
+<h3><a href="#protocol-project-organization" name="protocol-project-organization" class="anchor"><span class="anchor-link"></span></a>Protocol Project Organization</h3>
+<p>The protocol project contains the ADTs (Algebric Data Types) which define the protocol. As Bounded Context protocol is based on the CQRS pattern we will have the following messages:</p>
+<ul>
+  <li>Command</li>
+  <li>Event</li>
+  <li>Request</li>
+  <li>Response</li>
+</ul>
+<p>The platform extends the above with some administration notifications:</p>
+<ul>
+  <li>Failure</li>
+  <li>Auditing</li>
+  <li>Logging</li>
+</ul>
+<p>The typical package organization for the protocol project should implement the following structure:</p>
+<pre><code>&lt;organization&gt;.&lt;bounded-context&gt;.protocol.command
+&lt;organization&gt;.&lt;bounded-context&gt;.protocol.event
+&lt;organization&gt;.&lt;bounded-context&gt;.protocol.request
+&lt;organization&gt;.&lt;bounded-context&gt;.protocol.response
+
+&lt;organization&gt;.&lt;bounded-context&gt;.protocol.failure
+&lt;organization&gt;.&lt;bounded-context&gt;.protocol.auditing
+&lt;organization&gt;.&lt;bounded-context&gt;.protocol.logging
+</code></pre>
+<p>All the concrete implementations for commands/events/requests/responses/failures/auditing/logging should be living under the associated package.</p>
+<p>Is also good practice to suffix the entities depending on their types based on the below table:</p>
+<table>
+  <thead>
+    <tr>
+      <th>Message Type </th>
+      <th align="center">Suffix </th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Command </td>
+      <td align="center">Cmd </td>
+    </tr>
+    <tr>
+      <td>Event </td>
+      <td align="center">Evt </td>
+    </tr>
+    <tr>
+      <td>Request </td>
+      <td align="center">Req </td>
+    </tr>
+    <tr>
+      <td>Response </td>
+      <td align="center">Res </td>
+    </tr>
+    <tr>
+      <td>Failure </td>
+      <td align="center">Fail </td>
+    </tr>
+    <tr>
+      <td>Auditing </td>
+      <td align="center">Aud </td>
+    </tr>
+    <tr>
+      <td>Logging </td>
+      <td align="center">Log </td>
+    </tr>
+  </tbody>
+</table>
+<blockquote>
+  <p><strong>Note:</strong> When there is a corrispondence 1-to-1 between <code>Command</code> -&gt; <code>Event</code>, is good practice to name the event with the past form of the <code>Command</code> and suffix <code>Evt</code>. i.e.: <code>WalletCreateCmd</code> -&gt; <code>WalletCreatedEvt</code></p>
+</blockquote>
+<h3><a href="#service-module" name="service-module" class="anchor"><span class="anchor-link"></span></a>Service Module</h3>
+<p>All the micro-services of the <code>Bounded Context</code> should be a module which leaves inside the folder service and has its own module folder which reflects the project name.</p>
+<blockquote>
+  <p><strong>Note:</strong> is recommended to suffix the service name with <code>service</code>.</p>
+</blockquote>
+<p>For example the service <code>session-service</code> which is part of the bounded context <code>account-system</code> will leave:</p>
+<pre><code>account-system/
+  . . .
+  service/
+    session-service/
+    
+</code></pre>
+<p>The typical package organization for the service module should implement the following structure:</p>
+<pre><code>&lt;organization&gt;.&lt;bounded-context&gt;.&lt;service-name&gt;.domain
+&lt;organization&gt;.&lt;bounded-context&gt;.&lt;service-name&gt;.processor
+&lt;organization&gt;.&lt;bounded-context&gt;.&lt;service-name&gt;.view
+&lt;organization&gt;.&lt;bounded-context&gt;.&lt;service-name&gt;.service
+</code></pre>
+<p>#### Domain  The <strong>domain</strong> package contains all the domain object used by this service in order to implement some business logic.  This is the internal domain which is not publicly exposed outside.  There are some conventions to follow fo implement an effective model for micro-services based on <strong>Entity</strong>, <strong>ValueObject</strong>,  <strong>Aggregate</strong> and <strong>AggregateRoot</strong> (find more on how to design effective models <a href="TODO">here</a>).</p>
+<p>#### Processor/View/Service  This is where you organise your micro-services functionality, segregating the components which manipulate the entity status of your  module (write-part: <code>processors</code>) and the one which aggregate information to be exposed (read-part: <code>views</code>).  You might also have some other services which can be organised under the <code>service</code> sub-package.</p>
+</div>
+<div class="large-3 show-for-large column" data-sticky-container>
+<nav class="sidebar sticky" data-sticky data-anchor="docs" data-sticky-on="large">
+<div class="page-nav">
+<div class="nav-title">On this page:</div>
+<div class="nav-toc">
+<ul>
+  <li><a href="bounded-context.html#reactive-bounded-context">Reactive Bounded Context</a>
+  <ul>
+    <li><a href="bounded-context.html#introduction">Introduction</a></li>
+    <li><a href="bounded-context.html#bounded-context-project-structure">Bounded Context Project Structure</a>
+    <ul>
+      <li><a href="bounded-context.html#protocol-project-organization">Protocol Project Organization</a></li>
+      <li><a href="bounded-context.html#service-module">Service Module</a></li>
+    </ul></li>
+  </ul></li>
+</ul>
+</div>
+</div>
+</nav>
+</div>
+</div>
+
+</section>
+</div>
+
+</div>
+
+<footer class="site-footer">
+
+<section class="site-footer-nav">
+<div class="expanded row">
+<div class="small-12 large-offset-2 large-10 column">
+<div class="row site-footer-content">
+
+<div class="small-12 medium-4 large-3 text-center column">
+<div class="nav-links">
+<ul>
+<!-- <li><a href="https://www.example.com/products/">Products</a> -->
+</ul>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+</section>
+
+<section class="site-footer-base">
+<div class="expanded row">
+<div class="small-12 large-offset-2 large-10 column">
+<div class="row site-footer-content">
+
+<div class="small-12 text-center large-9 column">
+
+<!--
+<div class="copyright">
+<span class="text">&copy; 2017</span>
+<a href="https://www.example.com" class="logo">logo</a>
+</div>
+-->
+</div>
+
+</div>
+</div>
+</div>
+</section>
+</footer>
+
+</div>
+</div>
+</div>
+</body>
+
+<script type="text/javascript" src="lib/foundation/dist/foundation.min.js"></script>
+<script type="text/javascript">jQuery(document).foundation();</script>
+<script type="text/javascript" src="js/magellan.js"></script>
+
+<style type="text/css">@import "lib/prettify/prettify.css";</style>
+<script type="text/javascript" src="lib/prettify/prettify.js"></script>
+<script type="text/javascript" src="lib/prettify/lang-scala.js"></script>
+<script type="text/javascript">jQuery(function(){window.prettyPrint && prettyPrint()});</script>
+
+</html>

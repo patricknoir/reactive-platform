@@ -84,3 +84,30 @@ val walletClient = project.in(file("examples/wallet-client"))
   .settings(commonSettings)
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(protocol, root)
+
+lazy val publishSite = taskKey[Unit]("publish the site under /docs")
+val dest = (baseDirectory / "docs")
+
+lazy val documentation =
+  project
+    .in(file("documentation"))
+    .settings(commonSettings:_*)
+    .settings(
+      name := "documentation",
+      paradoxTheme := Some(builtinParadoxTheme("generic")),
+      paradoxProperties in Compile ++= Map(
+        "scaladoc.rfc.base_url" -> s"https://patricknoir.github.io/reactive-platform/api/%s.html"
+      ),
+      paradoxNavigationDepth := 3,
+      publishSite := Def.task {
+        println("Executing task publishSite!")
+        val docsDir = (baseDirectory / "../docs").value
+        val internalApiDir = (baseDirectory / "../docs/api").value
+        val apidocsDir = (baseDirectory / "../apidocs").value
+        val siteDir = (paradox in Compile).value //** "*"
+        IO.delete(docsDir)
+        IO.createDirectory(docsDir)
+        IO.copyDirectory(siteDir, docsDir, true)
+        IO.copyDirectory(apidocsDir, internalApiDir, true)
+      }.value
+    ).enablePlugins(ParadoxPlugin)
