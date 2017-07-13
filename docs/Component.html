@@ -93,7 +93,7 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
   <li>Updating the internal data in a consistent way</li>
   <li>Respond to specific queries over the data</li>
 </ul>
-<p>Because of the above responsibility we tend to specialise them into:</p>
+<p>Because of the above responsibilities we tend to specialise them into:</p>
 <ul>
   <li>Processors: components responsible to handle the <code>write-model</code></li>
   <li>Views: components responsbile to handle the <code>read-model</code></li>
@@ -101,6 +101,49 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
 <h2><a href="#processor" name="processor" class="anchor"><span class="anchor-link"></span></a>Processor</h2>
 <p>A processor is a component that has to react to specific commands and input events, in order to update the bounded context status in a consistent way and generate notification events for each side effect performed.</p>
 <p>A processor owns a model and defines stateful services to accomplish to the above responsibility</p>
+<p>Based on the above definition the processor responsibilities is to implement all the possible function that manipulate the status change for a specific entity of your model within the <code>Bounded Context</code>.</p>
+<p>In a <code>Bounded Context</code>, status changes can be triggered by:</p>
+<ul>
+  <li>A <em>valid</em> <code>Command</code> sent to the <code>Bounded Context</code> queue</li>
+  <li>A reaction to an <code>Event</code> which the <code>Bounded Context</code> has subscribed</li>
+  <li>A time based trigger within the <code>Bounded Context</code></li>
+</ul>
+<p>A possible pseudo-code definition of a processor can be the below:</p>
+<pre class="prettyprint"><code class="language-scala"><br/>/**
+* Describes how the current entity status passed as input parameter
+* should be changed into the final output Entity value in front of 
+* a command, and the Event should be generated to describe the Side 
+* Effect.
+*/
+type Cmd[Entity] = (Entity, _ &lt;: Command) =&gt; (Entity, _ &lt;: Event)
+
+/**
+* Describes how the current entity status passed as input parameter
+* should be changed into the final output Entity value in front of 
+* an event observed, and the Event should be generated to describe the Side 
+* Effect.
+*/
+type Evt[Entity] = (Entity, _ &lt;: Event) =&gt; (Entity, _ &lt;: Event)
+
+trait Processor[Entity] {
+  val cmdModifiers: Set[Cmd[Entity]]
+  val evtModifiers: Set[Evt[Entity]]
+}
+
+</code></pre>
+<p>Example of a command modifier for an <code>Option[Wallet]</code>:</p>
+<pre class="prettyprint"><code class="language-scala">val debitWalletCmd: Cmd[Option[Wallet]] = command(&quot;debitCmd&quot;) { (optWallet: Option[Wallet], cmd: DebitCmd) =&gt;
+    optWallet.fold(
+      throw new RuntimeException(s&quot;Wallet ${cmd.id} does not exist&quot;)
+    )
+    { wallet =&gt;
+      if (!wallet.active) throw new RuntimeException(s&quot;Wallet ${wallet.id} is not active&quot;)
+      val newWallet = wallet.debit(cmd.amount)
+      if (newWallet.amount &lt; 0) throw new RuntimeException(s&quot;Insufficient balance for debit amount: ${cmd.amount}&quot;)
+      (Option(newWallet), Seq(DebitedEvt(cmd.id, cmd.amount)))
+    }
+}
+</code></pre>
 <h2><a href="#view" name="view" class="anchor"><span class="anchor-link"></span></a>View</h2>
 <p>A view is a specific representation of the internal bounded context model suitable to answer specific queries in an effective manner. A view react to events in order to update its <code>read-model</code> and provide <code>responses</code> to specific <code>requests</code>.</p>
 <p>A view owns a model and defines stateful services to accomplish to the above responsibility.</p>
@@ -108,6 +151,15 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
 <pre class="prettyprint"><code class="language-scala">case class Service[In, Out](id: String)(function: In =&gt; Out)
 </code></pre>
 <h3><a href="#stateful-service" name="stateful-service" class="anchor"><span class="anchor-link"></span></a>Stateful Service</h3>
+<p>Is a State Monad on the Out type of the <code>Service[In, Out]</code></p>
+<pre class="prettyprint"><code class="language-scala">type StatefulService[S, I, O] = Service[I, State[S, O]]
+</code></pre>
+<p>where State is:</p>
+<pre class="prettyprint"><code class="language-$scala"><br/>case class State[S, O] (f: S =&gt; (S, O)) {
+ ...
+}
+
+</code></pre>
 </div>
 <div class="large-3 show-for-large column" data-sticky-container>
 <nav class="sidebar sticky" data-sticky data-anchor="docs" data-sticky-on="large">

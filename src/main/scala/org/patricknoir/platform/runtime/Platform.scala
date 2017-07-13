@@ -170,7 +170,7 @@ object Platform extends LazyLogging {
       implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[req.Input]]
       implicit val ser = serializer.asInstanceOf[ReactiveSerializer[req.Output]]
       ReactiveRoute(Map(req.id -> ReactiveService[req.Input, req.Output](req.id)(in => (server ? in).mapTo[req.Output])))
-    }.foldLeft(ReactiveRoute())(_ ~ _)
+    }.reduce(_ ~ _)
   }
 
 }

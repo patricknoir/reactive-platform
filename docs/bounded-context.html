@@ -90,8 +90,8 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
 <h2><a href="#introduction" name="introduction" class="anchor"><span class="anchor-link"></span></a>Introduction</h2>
 <p>A <code>Bounded Context</code> is a self contained system which masters its internal model and implements some business functionality.</p>
 <p>A <code>Bounded Context</code> can interact with other components only through a well defined protocol of communication which is effectively its <code>API</code>.</p>
-<p>In order to be <code>reactive</code> the API is based on asynchronous message driven communication, this approach will give us several advantages  which have been described <a href="TODO">here</a>.</p>
-<p>To define a <code>Bounded Context</code> we need to describe:</p>
+<p>In order to be <code>reactive</code> the API is based on asynchronous message driven communication. This approach will give us several advantages  which have been described <a href="TODO">here</a>.</p>
+<p>To define a <code>Bounded Context</code> 3 elements are required:</p>
 <ul>
   <li>an internal model</li>
   <li>micro-services to work on the model (_Processors_ and <em>Views</em>)</li>
@@ -103,7 +103,7 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
   <p>Bounded Context: name = <code>account-system</code>, version = <code>1.0.0</code></p>
   <p><strong>NOTE</strong>: by convention all the bounded context name should have a suffix <code>system</code>, this is preferred to others like <code>manager</code>.</p>
 </blockquote>
-<p>A <code>Bounded Context</code> project has always a sub-module called <code>protocol</code> as a separate entity. This is where we define all the messages in order to interact with this specific <code>Bounded Context</code>.</p>
+<p>A <code>Bounded Context</code> project has always a sub-module called <code>protocol</code> as a separate entity. This is where we define all the messages in order to interact with this specific <code>Bounded Context</code> (Public API).</p>
 <ul>
   <li>[bounded-context]</li>
   <li>protocol</li>
@@ -114,14 +114,14 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
   </li>
 </ul>
 <h3><a href="#protocol-project-organization" name="protocol-project-organization" class="anchor"><span class="anchor-link"></span></a>Protocol Project Organization</h3>
-<p>The protocol project contains the ADTs (Algebric Data Types) which define the protocol. As Bounded Context protocol is based on the CQRS pattern we will have the following messages:</p>
+<p>The protocol project contains the ADTs (Algebric Data Types) which define the protocol. As the Bounded Context protocol is based on the CQRS pattern we will have the following messages:</p>
 <ul>
   <li>Command</li>
   <li>Event</li>
   <li>Request</li>
   <li>Response</li>
 </ul>
-<p>The platform extends the above with some administration notifications:</p>
+<p>The platform extends the above with some administration <em>notifications</em>:</p>
 <ul>
   <li>Failure</li>
   <li>Auditing</li>
@@ -181,7 +181,7 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
   <p><strong>Note:</strong> When there is a corrispondence 1-to-1 between <code>Command</code> -&gt; <code>Event</code>, is good practice to name the event with the past form of the <code>Command</code> and suffix <code>Evt</code>. i.e.: <code>WalletCreateCmd</code> -&gt; <code>WalletCreatedEvt</code></p>
 </blockquote>
 <h3><a href="#service-module" name="service-module" class="anchor"><span class="anchor-link"></span></a>Service Module</h3>
-<p>All the micro-services of the <code>Bounded Context</code> should be a module which leaves inside the folder service and has its own module folder which reflects the project name.</p>
+<p>Each micro-service in the <code>Bounded Context</code> should be a module which leaves inside the folder service and has its own module folder which reflects the project name.</p>
 <blockquote>
   <p><strong>Note:</strong> is recommended to suffix the service name with <code>service</code>.</p>
 </blockquote>
@@ -198,8 +198,66 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
 &lt;organization&gt;.&lt;bounded-context&gt;.&lt;service-name&gt;.view
 &lt;organization&gt;.&lt;bounded-context&gt;.&lt;service-name&gt;.service
 </code></pre>
-<p>#### Domain  The <strong>domain</strong> package contains all the domain object used by this service in order to implement some business logic.  This is the internal domain which is not publicly exposed outside.  There are some conventions to follow fo implement an effective model for micro-services based on <strong>Entity</strong>, <strong>ValueObject</strong>,  <strong>Aggregate</strong> and <strong>AggregateRoot</strong> (find more on how to design effective models <a href="TODO">here</a>).</p>
-<p>#### Processor/View/Service  This is where you organise your micro-services functionality, segregating the components which manipulate the entity status of your  module (write-part: <code>processors</code>) and the one which aggregate information to be exposed (read-part: <code>views</code>).  You might also have some other services which can be organised under the <code>service</code> sub-package.</p>
+<h3><a href="#domain" name="domain" class="anchor"><span class="anchor-link"></span></a>Domain</h3>
+<p>The <strong>domain</strong> package contains all the domain objects used by this service in order to implement some business logic.  This is the internal domain which is not publicly exposed and only used internally to the <code>Bounded Context</code>.  There are some conventions to follow to implement an effective model for micro-services based on <strong>Entity</strong>, <strong>ValueObject</strong>,  <strong>Aggregate</strong> and <strong>AggregateRoot</strong> (find more on how to design effective models <a href="TODO">here</a>).</p>
+<h3><a href="#processor-view-service" name="processor-view-service" class="anchor"><span class="anchor-link"></span></a>Processor/View/Service</h3>
+<p>This is where you organise your micro-services functionality, segregating the components which manipulate the entity status of your  module (write-part: <code>processors</code>) and the one which aggregate information to be exposed (read-part: <code>views</code>).</p>
+<h3><a href="#processor" name="processor" class="anchor"><span class="anchor-link"></span></a>Processor</h3>
+<p>A processor is a service responsible to manipulate state changes of a specific <strong>AggregateRoot</strong> with in the <code>Bounded Context</code>.</p>
+<p><strong>Processor Definition</strong> :</p>
+<pre class="prettyprint"><code class="language-scala"><br/>  /** You describe a Processor by defining its component name and version, a descriptor which
+    * contains some information related to the semantic on how processors are created (singleton, entity etc...)
+    *
+    * A processor is in charge to manipulate the root-aggregate `W` in order to guarantee consistence, this is done
+    * by defining the `reducers` commandModifiers, eventModifiers, which describes how the root-aggregate should be
+    * modified in reaction to specific commands or events (within the ProcessorProps[W].
+    *
+    * @param id processor component identifier.
+    * @param version processor component version.
+    * @param descriptor describes how this view should be create (singleton, per entity id etc...).
+    * @param props describes the behaviour of this processor.
+    * @tparam W represents the root-aggregate type.
+    */
+  sealed case class Processor[W](
+    override val id: String,
+    override val version: Version,
+    override val descriptor: ProcessorDescriptor,
+    override val model: W,
+    override val props: ProcessorProps[W]
+  ) extends Component[W]
+  
+  case class ProcessorProps[W](
+    commandModifiers: Set[CmdInfo[W]] = Set.empty[CmdInfo[W]],
+    eventModifiers: Set[Evt[W]] = Set.empty[Evt[W]],
+    queries: Set[AskInfo[W]] = Set.empty[AskInfo[W]]
+  ) extends ComponentProps[W]
+  
+</code></pre>
+<p><strong>Example</strong> :</p>
+<pre class="prettyprint"><code class="language-scala">  val walletProcessorDef = ProcessorDef[Option[Wallet]](
+      id = &quot;walletProcessor&quot;,
+      version = Version(1, 0, 0),
+      descriptor = shardingDescriptor,
+      model = None,
+      propsFactory = _ =&gt; ProcessorProps[Option[Wallet]](
+        commandModifiers = Set(
+          createWalletCmd,
+          debitWalletCmd,
+          createWalletCmd
+        ),
+        queries = Set(getBalanceReq)
+      )
+      
+</code></pre>
+<p><strong>Create Wallet Command</strong> :</p>
+<p>A CmdInfo[M] is a function from:</p>
+<pre class="prettyprint"><code class="language-scala">  type CmdInfo[M] = String =&gt; (M, _ &lt;: Command) =&gt; (M, _ &lt;: Event)
+</code></pre>
+<pre class="prettyprint"><code class="language-scala">  val createWalletCmd: CmdInfo[Option[Wallet]] = command(&quot;walletCreateCmd&quot;) { (optWallet: Option[Wallet], cmd: WalletCreateCmd) =&gt;
+      (Option(Wallet(cmd.id, cmd.amount, cmd.active)), Seq(WalletCreatedEvt(cmd.id, cmd.amount, cmd.active)))
+    }
+ 
+</code></pre>
 </div>
 <div class="large-3 show-for-large column" data-sticky-container>
 <nav class="sidebar sticky" data-sticky data-anchor="docs" data-sticky-on="large">
@@ -214,6 +272,9 @@ C16.952,7,17,6.553,17,6c0-0.553-0.048-1-0.6-1H3.6C3.048,5,3,5.447,3,6C3,6.553,3.
     <ul>
       <li><a href="bounded-context.html#protocol-project-organization">Protocol Project Organization</a></li>
       <li><a href="bounded-context.html#service-module">Service Module</a></li>
+      <li><a href="bounded-context.html#domain">Domain</a></li>
+      <li><a href="bounded-context.html#processor-view-service">Processor/View/Service</a></li>
+      <li><a href="bounded-context.html#processor">Processor</a></li>
     </ul></li>
   </ul></li>
 </ul>
