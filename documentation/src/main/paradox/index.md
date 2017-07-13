@@ -5,5 +5,7 @@
 @@@index
 
 * [Introduction](introduction.md)
+* [Bounded Context](bounded-context.md)
+* [Component](Component.md)
 
 @@@
