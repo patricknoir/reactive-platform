@@ -53,10 +53,12 @@ object Platform extends LazyLogging {
     implicit val materializer = ActorMaterializer()
     import system.dispatcher
 
+    val ctx: ComponentContext = DefaultComponentContextImpl(bc)
+
     implicit val timeout = config.serverDefaultTimeout
 
-    val context = new DefaultComponentContextImpl(bc)
-    val registry = new EtcdRegistryImpl(context, config)
+//    val context = new DefaultComponentContextImpl(bc)
+    val registry = new EtcdRegistryImpl(config)
     val messageFabric = MessageFabric.create(config.zookeeperHosts.mkString(","), config.zkMinBackOff, config.zkMaxBackOff)
 
     val result = for {
@@ -75,9 +77,9 @@ object Platform extends LazyLogging {
 
     (
       Platform(
-        processorServers = bc.componentDefs
-          .filter(_.isInstanceOf[ProcessorDef[_]])
-          .map(component => (component.id -> createProcessorServer(context, bc, component.asInstanceOf[ProcessorDef[_]])))
+        processorServers = bc.components
+          .filter(_.isInstanceOf[Processor[_]])
+          .map(component => (component.id -> createProcessorServer(ctx, bc, component.asInstanceOf[Processor[_]])))
           .toMap
       ).run(),
       system.whenTerminated
@@ -94,7 +96,7 @@ object Platform extends LazyLogging {
     implicit val timeout = config.serverDefaultTimeout
 
     val context = new DefaultComponentContextImpl(bc)
-    val registry = new EtcdRegistryImpl(context, config)
+    val registry = new EtcdRegistryImpl(config)
     val messageFabric = MessageFabric.create(config.zookeeperHosts.mkString(","), config.zkMinBackOff, config.zkMaxBackOff)
 
 
@@ -111,11 +113,9 @@ object Platform extends LazyLogging {
     } yield ()
   }
 
-  private def createProcessorServer(ctx: ComponentContext, bc: BoundedContext, processorProps: ProcessorDef[_])(implicit system: ActorSystem, config: PlatformConfig): ProcessorServer = {
+  private def createProcessorServer(ctx: ComponentContext, bc: BoundedContext, processor: Processor[_])(implicit system: ActorSystem, config: PlatformConfig): ProcessorServer = {
     import system.dispatcher
     implicit val timeout = config.serverDefaultTimeout
-
-    val processor: Processor[_] = processorProps.instantiate(ctx)
 
     val descriptor = processor.descriptor.asInstanceOf[KeyShardedProcessDescriptor]
     val extractIdFunction: PartialFunction[Any, (String, Any)] = {
@@ -127,7 +127,7 @@ object Platform extends LazyLogging {
 
     val server = ClusterSharding(system).start(
       typeName = processor.id,
-      entityProps = ProcessorActor.props(processor),
+      entityProps = ProcessorActor.props(ctx, processor),
       settings = ClusterShardingSettings(system),
       extractEntityId = extractIdFunction,
       extractShardId = extractShardIdFunction
@@ -146,8 +146,8 @@ object Platform extends LazyLogging {
     val commandSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers, 4, 10, 1 second)
     val responseSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers, 4, 10, 1 second)
 
-    val cmdRS = commandSource ~> createCommandRoute(processor.props.commandModifiers, server) ~> (commandFlow to commandSink)
-    val reqRS = requestSource ~> createRequestRoute(processor.props.queries, server) ~> responseSink
+    val cmdRS = commandSource ~> createCommandRoute(processor.commandModifiers, server) ~> (commandFlow to commandSink)
+    val reqRS = requestSource ~> createRequestRoute(processor.queries, server) ~> responseSink
 
     ProcessorServer(
       processor,
@@ -157,16 +157,16 @@ object Platform extends LazyLogging {
     )
   }
 
-  private def createCommandRoute[S](cmds: Set[CmdInfo[S]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
-    cmds.map { case StatefulServiceInfo(cmd, deserializer, serializer) =>
+  private def createCommandRoute[S](cmds: Set[CtxCmdInfo[S]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
+    cmds.map { case ContextStatefulServiceInfo(cmd, deserializer, serializer) =>
       implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[cmd.Input]]
       implicit val ser = serializer.asInstanceOf[ReactiveSerializer[cmd.Output]]
       ReactiveRoute(Map(cmd.id -> (ReactiveService[cmd.Input, cmd.Output](cmd.id)(in => (server ? in).mapTo[cmd.Output]))))
     }.reduce(_ ~ _)
   }
 
-  private def createRequestRoute[W](reqs: Set[AskInfo[W]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
-    reqs.map { case StatefulServiceInfo(req, deserializer, serializer) =>
+  private def createRequestRoute[W](reqs: Set[CtxAskInfo[W]], server: ActorRef)(implicit ec: ExecutionContext, timeout: Timeout) = {
+    reqs.map { case ContextStatefulServiceInfo(req, deserializer, serializer) =>
       implicit val des = deserializer.asInstanceOf[ReactiveDeserializer[req.Input]]
       implicit val ser = serializer.asInstanceOf[ReactiveSerializer[req.Output]]
       ReactiveRoute(Map(req.id -> ReactiveService[req.Input, req.Output](req.id)(in => (server ? in).mapTo[req.Output])))

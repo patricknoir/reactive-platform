@@ -33,7 +33,7 @@ case class ServiceURL(bcId: String, version: Version, messageName: String)
   * @param failureMailboxName
   * @param auditMailboxName
   * @param logMailboxName
-  * @param componentDefs
+  * @param components
   */
 case class BoundedContext(
   id: String,
@@ -45,7 +45,8 @@ case class BoundedContext(
   failureMailboxName: String = "failures",
   auditMailboxName: String = "audits",
   logMailboxName: String = "logs",
-  componentDefs: Set[ComponentDef[_]]
+  components: Set[Component[_]]
+//  componentDefs: Set[ComponentDef[_]]
 ) {
   private val prefix = s"${id}_${version}_"
   val fullRequestMailboxName: String = prefix + requestMailboxName
@@ -125,7 +126,7 @@ sealed trait Component[T] {
   val version: Version
   val descriptor: ComponentDescriptor
   val model: T
-  val props: ComponentProps[T]
+//  val props: ComponentProps[T]
 }
 
 /**
@@ -148,7 +149,6 @@ sealed trait Component[T] {
   * @param id processor component identifier.
   * @param version processor component version.
   * @param descriptor describes how this view should be create (singleton, per entity id etc...).
-  * @param props describes the behaviour of this processor.
   * @tparam W represents the root-aggregate type.
   */
 sealed case class Processor[W](
@@ -156,25 +156,11 @@ sealed case class Processor[W](
   override val version: Version,
   override val descriptor: ProcessorDescriptor,
   override val model: W,
-  override val props: ProcessorProps[W]
+  val commandModifiers: Set[CtxCmdInfo[W]] = Set.empty[CtxCmdInfo[W]],
+  val eventModifiers: Set[CtxEvtInfo[W]] = Set.empty[CtxEvtInfo[W]],
+  val queries: Set[CtxAskInfo[W]] = Set.empty[CtxAskInfo[W]]
+//  override val props: ProcessorProps[W]
 ) extends Component[W]
-
-case class ProcessorProps[W](
-  commandModifiers: Set[CmdInfo[W]] = Set.empty[CmdInfo[W]],
-  eventModifiers: Set[Evt[W]] = Set.empty[Evt[W]],
-  queries: Set[AskInfo[W]] = Set.empty[AskInfo[W]]
-) extends ComponentProps[W]
-
-case class ProcessorDef[W](
-  override val id: String,
-  override val version: Version,
-  override val descriptor: ProcessorDescriptor,
-  override val model: W,
-  override val propsFactory: (ComponentContext) => ProcessorProps[W]
-) extends ComponentDef[W] {
-  override def instantiate(ctx: ComponentContext): Processor[W] =
-    Processor(id, version, descriptor, model, propsFactory(ctx))
-}
 
 /**
   * VIEWS
@@ -195,7 +181,6 @@ case class ProcessorDef[W](
   * @param id view component identifier.
   * @param version view component version.
   * @param descriptor describes how this view should be create (singleton, per entity id etc...).
-  * @param props describes the behaviour of this view.
   * @tparam R represents the root-aggregate type.
   */
 sealed case class View[R](
@@ -203,24 +188,10 @@ sealed case class View[R](
   override val version: Version,
   override val descriptor: ViewDescriptor,
   override val model: R,
-  override val props: ViewProps[R]
+  val modifiers: Set[CtxEvtInfo[R]] = Set.empty[CtxEvtInfo[R]],
+  val queries: Set[CtxAskInfo[R]] = Set.empty[CtxAskInfo[R]]
+//  override val props: ViewProps[R]
 ) extends Component[R]
-
-case class ViewProps[R](
-  modifiers: Set[Evt[R]],
-  queries: Set[Ask[R]]
-) extends ComponentProps[R]
-
-case class ViewDef[R](
-  override val id: String,
-  override val version: Version,
-  override val descriptor: ViewDescriptor,
-  override val model: R,
-  override val propsFactory: (ComponentContext) => ViewProps[R]
-) extends ComponentDef[R] {
-  override def instantiate(ctx: ComponentContext): Component[R] =
-    View(id, version, descriptor, model, propsFactory(ctx))
-}
 
 sealed trait ComponentContext {
 
@@ -236,7 +207,7 @@ case class DefaultComponentContextImpl(bc: BoundedContext)(implicit system: Acto
 
   private implicit val timeout =  config.serverDefaultTimeout
 
-  private val registry = new EtcdRegistryImpl(this, config)
+  private val registry = new EtcdRegistryImpl(config)
 
   private implicit val materializer = ActorMaterializer()
 

@@ -20,15 +20,16 @@ import scala.concurrent.duration.FiniteDuration
 package object dsl {
 
   object request {
-    def apply[Req <: Request, Resp <: Response, S](id: String)(query: (S, Req) => Resp)(implicit reqCT: ClassTag[Req], respCT: ClassTag[Resp], deserializer: ReactiveDeserializer[Req], serializer: ReactiveSerializer[Resp]) = {
-      val fc: PartialFunction[Request, State[S, Response]] = {
-        case req: Req => State.inspect(state => query(state, req))
+    def apply[Req <: Request, Resp <: Response, S](id: String)(query: (ComponentContext, S, Req) => Resp)(implicit reqCT: ClassTag[Req], respCT: ClassTag[Resp], deserializer: ReactiveDeserializer[Req], serializer: ReactiveSerializer[Resp]) = {
+      val fc: PartialFunction[(ComponentContext, Request), State[S, Response]] = {
+        case (ctx: ComponentContext, req: Req) => State.inspect(state => query(ctx, state, req))
       }
-      StatefulServiceInfo[S, Request, Response](StatefulService.sync[S, Request, Response](id, fc), deserializer, serializer)
+      ContextStatefulServiceInfo[S, Request, Response](ContextStatefulService.sync[S, Request, Response](id, fc), deserializer, serializer)
     }
   }
 
-  object command {
+  @deprecated
+  object deprecateCommand {
     def apply[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => (S, Seq[E]))(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
       val fc: PartialFunction[Command, State[S, Seq[Event]]] = {
         case cmd: C => State(init => modifier(init, cmd))
@@ -44,6 +45,25 @@ package object dsl {
           }
       }
       StatefulServiceInfo[S, Command, Seq[Event]](StatefulService.async[S, Command, Seq[Event]](id, fc), deserializer, serializer)
+    }
+  }
+
+  object command {
+    def apply[C <: Command, E <: Event, S](id: String)(modifier: (ComponentContext, S, C) => (S, Seq[E]))(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
+      val fc: PartialFunction[(ComponentContext, Command), State[S, Seq[Event]]] = {
+        case (ctx: ComponentContext, cmd: C) => State(init => modifier(ctx, init, cmd))
+      }
+      ContextStatefulServiceInfo[S, Command, Seq[Event]](ContextStatefulService.sync[S, Command, Seq[Event]](id, fc), deserializer, serializer)
+    }
+
+    def async[C <: Command, E <: Event, S](id: String)(timeout: Timeout, modifier: (ComponentContext, S, C) => Future[(S, Seq[E])])(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
+      val fc: PartialFunction[(ComponentContext, Command), State[S, Seq[Event]]] = {
+        case (ctx: ComponentContext, cmd: C) =>
+          State { init =>
+            Await.result(modifier(ctx, init, cmd), timeout.duration) //can I avoid this blocking?
+          }
+      }
+      ContextStatefulServiceInfo[S, Command, Seq[Event]](ContextStatefulService.async[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
   }
 

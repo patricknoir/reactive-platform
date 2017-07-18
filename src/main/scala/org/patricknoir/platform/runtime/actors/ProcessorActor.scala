@@ -6,7 +6,7 @@ import akka.actor.{ActorLogging, ActorRef, Props, ReceiveTimeout, Stash, Status}
 import akka.persistence.{PersistentActor, RecoveryCompleted}
 import akka.util.Timeout
 import cats.data.State
-import org.patricknoir.platform.{AsyncStatefulService, Processor, SyncStatefulService}
+import org.patricknoir.platform._
 import org.patricknoir.platform.protocol.{Command, Event, Request, Response}
 import org.patricknoir.platform.runtime.actors.ProcessorActor.{CompleteCommand, EventRecover, WaitingComplete}
 
@@ -17,7 +17,7 @@ import scala.util.Try
 /**
   * Created by patrick on 26/03/2017.
   */
-class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends PersistentActor with Stash with ActorLogging {
+class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout: Timeout) extends PersistentActor with Stash with ActorLogging {
 
   val defaulEc: ExecutionContext = context.dispatcher
   val asyncCmdEc: ExecutionContext = context.system.dispatchers.lookup(context.system.settings.config.getString("platform.server.async-command-dispatcher"))
@@ -58,7 +58,7 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     log.debug(s"Receoved request: $req")
     findServiceForQuery(req).map { service =>
       log.debug(s"Service for request: $req found: ${service.id}")
-      val resp = service.func(req).run(model).value._2
+      val resp = service.func(ctx, req).run(model).value._2
       log.debug(s"Replying to request: $req with response: $resp")
       origin ! resp
     }.orElse {
@@ -71,11 +71,25 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
   private def handleCommand(cmd: Command, origin: ActorRef) = {
     log.debug(s"Received command: $cmd")
     findServiceForCommand(cmd).map {
-      case asyncService: AsyncStatefulService[T, Command, Seq[Event]] => handleAsyncCommand(asyncService, cmd, origin)
-      case syncService: SyncStatefulService[T, Command, Seq[Event]] => handleSyncCommand(syncService, cmd, origin)
+      case ctxService: ContextStatefulService[T, Command, Seq[Event]] => handleCtxCommand(ctxService, cmd, origin)
     }.orElse {
       log.warning(s"Service not found for command: $cmd")
       None // FIXME: Need to reply in order to get the future completed
+    }
+  }
+
+  private def handleCtxCommand(css: ContextStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef) = {
+    Try {
+      css.func(ctx, cmd)
+    }.map { stateM =>
+      persist(EventRecover(stateM)) { event =>
+        val state = event.stateM
+        val (newModel, events) = state.run(model).value
+        log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
+        updateStateAndReply((newModel, events), origin)
+      }
+    }.recover { case err: Throwable =>
+      reportErrorAndReply(err, cmd, origin)
     }
   }
 
@@ -154,14 +168,14 @@ class ProcessorActor[T](processor: Processor[T], timeout: Timeout) extends Persi
     unstashAll()
   }
 
-  private def findServiceForCommand(cmd: Command) = processor.props.commandModifiers.map(_.service).find(_.func.isDefinedAt(cmd))
-  private def findServiceForEvent(evt: Event) = processor.props.eventModifiers.find(_.func.isDefinedAt(evt))
-  private def findServiceForQuery(req: Request) = processor.props.queries.map(_.service).find(_.func.isDefinedAt(req))
+  private def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_.service).find(_.func.isDefinedAt(ctx, cmd))
+  private def findServiceForEvent(evt: Event) = processor.eventModifiers.map(_.service).find(_.func.isDefinedAt(ctx, evt))
+  private def findServiceForQuery(req: Request) = processor.queries.map(_.service).find(_.func.isDefinedAt(ctx, req))
 
 }
 
 object ProcessorActor {
-  def props(processor: Processor[_])(implicit timeout: Timeout): Props = Props(new ProcessorActor(processor, timeout))
+  def props(ctx: ComponentContext, processor: Processor[_])(implicit timeout: Timeout): Props = Props(new ProcessorActor(ctx, processor, timeout))
   case class CompleteCommand[S](cmd: Command, result: Either[Throwable, (S, Seq[Event])], origin: ActorRef)
 
   case class EventRecover[S](stateM: State[S, Seq[Event]])

@@ -47,7 +47,7 @@ trait Registry {
 
 }
 
-class EtcdRegistryImpl(context: ComponentContext, config: PlatformConfig) extends Registry {
+class EtcdRegistryImpl(config: PlatformConfig) extends Registry {
 
   import io.circe.generic.auto._
   import io.circe.syntax._
@@ -76,19 +76,19 @@ class EtcdRegistryImpl(context: ComponentContext, config: PlatformConfig) extend
 
   override def unregister(bcId: String, version: Version): Unit = client.delete(s"$bcId/$version").send().get()
 
-  private def extractPropNames(component: ComponentDef[_]): (Set[String], Set[String]) = component match {
-    case p: ProcessorDef[_] =>
+  private def extractPropNames(component: Component[_]): (Set[String], Set[String]) = component match {
+    case p: Processor[_] =>
       (
-        p.propsFactory(context).commandModifiers.map(_.service.id),
-        p.propsFactory(context).queries.map(_.service.id)
+        p.commandModifiers.map(_.service.id),
+        p.queries.map(_.service.id)
       )
   }
 
   private def toBoundedContextInfo(bc: BoundedContext): BoundedContextInfo = {
     val id = bc.id
     val version = bc.version
-    val services: Set[(String, Version)] = bc.componentDefs.map(c => (c.id, c.version))
-    val (commands, requests) = bc.componentDefs.map(extractPropNames).foldLeft((Set.empty[String], Set.empty[String])) { case ((accCmds, accReqs), (cmds, reqs)) =>
+    val services: Set[(String, Version)] = bc.components.map(c => (c.id, c.version))
+    val (commands, requests) = bc.components.map(extractPropNames).foldLeft((Set.empty[String], Set.empty[String])) { case ((accCmds, accReqs), (cmds, reqs)) =>
       (accCmds ++ cmds, accReqs ++ reqs)
     }
 
@@ -116,7 +116,7 @@ class EtcdRegistryImpl(context: ComponentContext, config: PlatformConfig) extend
 
 }
 
-class DefaultRegistryImpl(context: ComponentContext, config: PlatformConfig) extends Registry {
+class DefaultRegistryImpl(config: PlatformConfig) extends Registry {
 
   import io.circe.generic.auto._
   import io.circe.syntax._
@@ -127,8 +127,8 @@ class DefaultRegistryImpl(context: ComponentContext, config: PlatformConfig) ext
   private def toBoundedContextInfo(bc: BoundedContext): BoundedContextInfo = {
     val id = bc.id
     val version = bc.version
-    val services: Set[(String, Version)] = bc.componentDefs.map(c => (c.id, c.version))
-    val (commands, requests) = bc.componentDefs.map(extractPropNames).foldLeft((Set.empty[String], Set.empty[String])) { case ((accCmds, accReqs), (cmds, reqs)) =>
+    val services: Set[(String, Version)] = bc.components.map(c => (c.id, c.version))
+    val (commands, requests) = bc.components.map(extractPropNames).foldLeft((Set.empty[String], Set.empty[String])) { case ((accCmds, accReqs), (cmds, reqs)) =>
       (accCmds ++ cmds, accReqs ++ reqs)
     }
 
@@ -149,11 +149,11 @@ class DefaultRegistryImpl(context: ComponentContext, config: PlatformConfig) ext
     )
   }
 
-  private def extractPropNames(component: ComponentDef[_]): (Set[String], Set[String]) = component match {
-    case p: ProcessorDef[_] =>
+  private def extractPropNames(component: Component[_]): (Set[String], Set[String]) = component match {
+    case p: Processor[_] =>
       (
-        p.propsFactory(context).commandModifiers.map(_.service.id),
-        p.propsFactory(context).queries.map(_.service.id)
+        p.commandModifiers.map(_.service.id),
+        p.queries.map(_.service.id)
       )
   }
 

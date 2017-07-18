@@ -21,7 +21,7 @@ object Boot extends App with LazyLogging {
 
   implicit val timeout = Timeout(10 seconds)
 
-  val counterProcessorDef = ProcessorDef[Int](
+  val counterProcessor = Processor[Int](
     id = "counterProcessor",
     version = Version(1, 0, 0),
     descriptor = KeyShardedProcessDescriptor(
@@ -39,36 +39,33 @@ object Boot extends App with LazyLogging {
       shardSpaceSize = 100
     ),
     model = 0,
-    propsFactory = (context: ComponentContext) =>
-      ProcessorProps(
-        commandModifiers = Set(
-          command("incrementCmd") { (counter: Int, ic: IncrementCounterCmd) =>
-            context.log("incrementCmd").info("Called with {}", counter)
-            (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-          },
-          command("decrementCmd") { (counter: Int, ic: DecrementCounterCmd) =>
-            context.log("decrementCmd").info("Called with {}", counter)
-            (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
-          },
-          command.async("incrementIfCmd")(
-            timeout = Timeout(10 seconds),
-            modifier = (counter: Int, ic: IncrementCounterIfCmd) => {
-              // Following handling is just for demo purposes
-              context.request[CounterValueReq, CounterValueResp](ServiceURL("counterBC", Version(1, 0, 0), "counterProcessor"), CounterValueReq(ic.id)).map(resp =>
-                if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-                else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}") // This is the same as failing the future
-              )
-            }
+    commandModifiers = Set(
+      command("incrementCmd") { (context: ComponentContext, counter: Int, ic: IncrementCounterCmd) =>
+        context.log("incrementCmd").info("Called with {}", counter)
+        (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+      },
+      command("decrementCmd") { (context: ComponentContext, counter: Int, ic: DecrementCounterCmd) =>
+        context.log("decrementCmd").info("Called with {}", counter)
+        (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
+      },
+      command.async("incrementIfCmd")(
+        timeout = Timeout(10 seconds),
+        modifier = (context: ComponentContext, counter: Int, ic: IncrementCounterIfCmd) => {
+          // Following handling is just for demo purposes
+          context.request[CounterValueReq, CounterValueResp](ServiceURL("counterBC", Version(1, 0, 0), "counterProcessor"), CounterValueReq(ic.id)).map(resp =>
+            if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+            else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}") // This is the same as failing the future
           )
-        ),
-        eventModifiers = Set(),
-        queries = Set(
-          request("counterValueReq") { (counter: Int, req: CounterValueReq) =>
-            context.log("counterValueReq").info("Handling request")
-            CounterValueResp(req.id, counter)
-          }
-        )
+        }
       )
+    ),
+    eventModifiers = Set(),
+    queries = Set(
+      request("counterValueReq") { (context: ComponentContext, counter: Int, req: CounterValueReq) =>
+        context.log("counterValueReq").info("Handling request")
+        CounterValueResp(req.id, counter)
+      }
+    )
   )
 
   val bc = BoundedContext(
@@ -81,7 +78,7 @@ object Boot extends App with LazyLogging {
     failureMailboxName = "failures",
     auditMailboxName = "auditing",
     logMailboxName = "logging",
-    componentDefs = Set(counterProcessorDef)
+    components = Set(counterProcessor)
   )
 
   val (installed, runtime) = Platform.install(bc)

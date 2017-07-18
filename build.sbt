@@ -43,12 +43,11 @@ val commonDependencies = Seq(
 )
 
 
-
 val root = project
-            .in(file("."))
-            .settings(commonSettings)
-            .settings(libraryDependencies ++= commonDependencies)
-            .enablePlugins(DockerPlugin, AshScriptPlugin)
+  .in(file("."))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .enablePlugins(DockerPlugin, AshScriptPlugin)
 
 val server = project.in(file("server/"))
               .settings(commonSettings)
@@ -112,3 +111,5 @@ lazy val documentation =
         IO.copyDirectory(apidocsDir, internalApiDir, true)
       }.value
     ).enablePlugins(ParadoxPlugin)
+
+//lazy val all = project.aggregate(root, server, client, walletSystem, walletClient, documentation)

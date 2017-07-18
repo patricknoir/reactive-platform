@@ -14,11 +14,11 @@ import org.patricknoir.wallet.protocol.response.GetBalanceRes
   */
 package object processor {
 
-  val createWalletCmd: CmdInfo[Option[Wallet]] = command("walletCreateCmd") { (optWallet: Option[Wallet], cmd: WalletCreateCmd) =>
+  val createWalletCmd: CtxCmdInfo[Option[Wallet]] = command("walletCreateCmd") { (_: ComponentContext, optWallet: Option[Wallet], cmd: WalletCreateCmd) =>
     (Option(Wallet(cmd.id, cmd.amount, cmd.active)), Seq(WalletCreatedEvt(cmd.id, cmd.amount, cmd.active)))
   }
 
-  val debitWalletCmd: CmdInfo[Option[Wallet]] = command("debitCmd") { (optWallet: Option[Wallet], cmd: DebitCmd) =>
+  val debitWalletCmd: CtxCmdInfo[Option[Wallet]] = command("debitCmd") { (_: ComponentContext, optWallet: Option[Wallet], cmd: DebitCmd) =>
     optWallet.fold(
       throw new RuntimeException(s"Wallet ${cmd.id} does not exist")
     )
@@ -30,7 +30,7 @@ package object processor {
     }
   }
 
-  val creditWalletReducer: CmdInfo[Option[Wallet]] = command("creditCmd") { (optWallet: Option[Wallet], cmd: CreditCmd) =>
+  val creditWalletReducer: CtxCmdInfo[Option[Wallet]] = command("creditCmd") { (_: ComponentContext, optWallet: Option[Wallet], cmd: CreditCmd) =>
     optWallet.fold(
       throw new RuntimeException(s"Wallet ${cmd.id} is not active")
     )
@@ -41,7 +41,7 @@ package object processor {
     }
   }
 
-  val getBalanceReq: AskInfo[Option[Wallet]] = request("getBalanceReq") { (optWallet: Option[Wallet], req: GetBalanceReq) =>
+  val getBalanceReq: CtxAskInfo[Option[Wallet]] = request("getBalanceReq") { (_: ComponentContext, optWallet: Option[Wallet], req: GetBalanceReq) =>
     GetBalanceRes(req.walletId, optWallet.map(_.amount))
   }
 
@@ -60,20 +60,17 @@ package object processor {
     shardSpaceSize = 100
   )
 
-  val walletProcessorDef = ProcessorDef[Option[Wallet]](
+  val walletProcessor = Processor[Option[Wallet]](
     id = "walletProcessor",
     version = Version(1, 0, 0),
     descriptor = shardingDescriptor,
     model = None,
-    propsFactory = _ => ProcessorProps[Option[Wallet]](
-      commandModifiers = Set(
-        createWalletCmd,
-        debitWalletCmd,
-        createWalletCmd
-      ),
-      queries = Set(getBalanceReq)
-    )
-
+    commandModifiers = Set(
+      createWalletCmd,
+      debitWalletCmd,
+      createWalletCmd
+    ),
+    queries = Set(getBalanceReq)
   )
 
 
