@@ -17,6 +17,7 @@ object Boot extends App with LazyLogging {
 
   import io.circe.generic.auto._
   import Util._
+  import scala.concurrent.ExecutionContext.Implicits.global
 
   implicit val timeout = Timeout(10 seconds)
 

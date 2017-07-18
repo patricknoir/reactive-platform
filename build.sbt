@@ -38,7 +38,8 @@ val commonDependencies = Seq(
   "org.iq80.leveldb"                %  "leveldb"                    % "0.7",
   "org.fusesource.leveldbjni"       %  "leveldbjni-all"             % "1.8",
   "org.apache.kafka"                %%  "kafka"                     % Versions.Kafka,
-  "com.orbitz.consul"               % "consul-client"               % "0.14.0"
+  "com.orbitz.consul"               % "consul-client"               % "0.14.0",
+  "org.mousio"                      % "etcd4j"                      % "2.13.0"
 )
 
 

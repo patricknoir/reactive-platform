@@ -1,14 +1,21 @@
 package org.patricknoir.platform.runtime
 
+import java.net.URI
 import java.util.Optional
 
 import akka.actor.ActorSystem
 import com.google.common.base
+import com.google.common.net.HostAndPort
 import com.orbitz.consul.Consul
-import io.circe.Printer
+import com.typesafe.config.Config
+import io.circe.{Decoder, Printer}
+import mousio.etcd4j.EtcdClient
+import mousio.etcd4j.responses.EtcdKeysResponse
 import org.patricknoir.platform._
+import org.patricknoir.platform.dsl.PlatformConfig
 
 import scala.collection.JavaConverters._
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.Try
 
 
@@ -40,7 +47,76 @@ trait Registry {
 
 }
 
-class DefaultRegistryImpl(context: ComponentContext) extends Registry {
+class EtcdRegistryImpl(context: ComponentContext, config: PlatformConfig) extends Registry {
+
+  import io.circe.generic.auto._
+  import io.circe.syntax._
+  import scala.collection.JavaConverters._
+
+  val host = config.registryHost
+  val port = config.registryPort
+
+  val client = new EtcdClient(URI.create(s"http://$host:$port"))
+
+  override def get(bcId: String, version: Version): Option[BoundedContextInfo] = parse[BoundedContextInfo](s"$bcId/$version")
+
+  override def getAll(): Set[BoundedContextInfo] = {
+    val response = client.getAll().send().get()
+    response.node.getNodes.asScala
+      .map(n => io.circe.parser.decode[BoundedContextInfo](n.value).toOption.get)
+      .toSet
+  }
+
+  override def register(bc: BoundedContext): Try[BoundedContextInfo] = Try {
+    val key = s"${bc.id}/${bc.version}"
+    val bcInfo = toBoundedContextInfo(bc)
+    client.put(key, Printer.noSpaces.pretty(bcInfo.asJson)).send().get()
+    bcInfo
+  }
+
+  override def unregister(bcId: String, version: Version): Unit = client.delete(s"$bcId/$version").send().get()
+
+  private def extractPropNames(component: ComponentDef[_]): (Set[String], Set[String]) = component match {
+    case p: ProcessorDef[_] =>
+      (
+        p.propsFactory(context).commandModifiers.map(_.service.id),
+        p.propsFactory(context).queries.map(_.service.id)
+      )
+  }
+
+  private def toBoundedContextInfo(bc: BoundedContext): BoundedContextInfo = {
+    val id = bc.id
+    val version = bc.version
+    val services: Set[(String, Version)] = bc.componentDefs.map(c => (c.id, c.version))
+    val (commands, requests) = bc.componentDefs.map(extractPropNames).foldLeft((Set.empty[String], Set.empty[String])) { case ((accCmds, accReqs), (cmds, reqs)) =>
+      (accCmds ++ cmds, accReqs ++ reqs)
+    }
+
+    //FIXME: add input events
+    BoundedContextInfo(
+      id,
+      version,
+      bc.fullCommandMailboxName,
+      "TBD",
+      bc.fullEventMailboxName,
+      bc.fullRequestMailboxName,
+      bc.fullFailureMailboxName,
+      bc.fullLogMailboxName,
+      commands,
+      Set.empty,
+      requests,
+      services
+    )
+  }
+
+  private def parse[T: Decoder](key: String) : Option[T] = for {
+    content <- Try(client.get(key).send.get().node.value).toOption
+    result <- io.circe.parser.decode[T](content).toOption
+  } yield result
+
+}
+
+class DefaultRegistryImpl(context: ComponentContext, config: PlatformConfig) extends Registry {
 
   import io.circe.generic.auto._
   import io.circe.syntax._

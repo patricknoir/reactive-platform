@@ -52,7 +52,9 @@ package object dsl {
     zookeeperHosts: Set[String],
     serverDefaultTimeout: Timeout,
     zkMinBackOff: FiniteDuration,
-    zkMaxBackOff: FiniteDuration
+    zkMaxBackOff: FiniteDuration,
+    registryHost: String,
+    registryPort: Int
   )
 
   object PlatformConfig {
@@ -63,7 +65,9 @@ package object dsl {
       zookeeperHosts = config.getStringList("platform.fabric.message.zookeeper").toList.toSet,
       serverDefaultTimeout = Timeout(config.getDuration("platform.server.timeout").getSeconds, TimeUnit.SECONDS),
       zkMinBackOff = FiniteDuration(config.getDuration("platform.fabric.message.backoff.min").getSeconds, TimeUnit.SECONDS),
-      zkMaxBackOff = FiniteDuration(config.getDuration("platform.fabric.message.backoff.max").getSeconds, TimeUnit.SECONDS)
+      zkMaxBackOff = FiniteDuration(config.getDuration("platform.fabric.message.backoff.max").getSeconds, TimeUnit.SECONDS),
+      registryHost = config.getString("platform.registry.host"),
+      registryPort = config.getInt("platform.registry.port")
     )
   }
 

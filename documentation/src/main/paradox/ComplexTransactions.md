@@ -33,7 +33,7 @@ in case one or more of the above actions fails.
 
 For this purpose the Message Fabric will implement a CPE based on streaming execution.
 
-The __Saga can be described as a stream where after step 1, 2, 3 have been executed (potentially in parallel)
+The __Saga__ can be described as a stream where after step 1, 2, 3 have been executed (potentially in parallel)
 the step 4 can finally be executed and terminated.
 
 The saga is also responsible to recover from a partial failure of each of this operation, making sure that the system
@@ -62,3 +62,4 @@ the target `Bounded Context` to be able to execute the command.
 (Command => Set[Request]) => Set[Response] => Command
 
 ```
+

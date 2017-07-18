@@ -9,7 +9,7 @@
     </appender>
 
     <!--<logger name="org.akka" level="${LOG_LEVEL:-TRACE}"/>-->
-    <logger name="akka" level="DEBUG"/>
+    <logger name="akka" level="INFO"/>
 
     <logger name="org.apache.kafka" level="INFO"/>
 

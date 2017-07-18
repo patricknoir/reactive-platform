@@ -56,7 +56,7 @@ object Platform extends LazyLogging {
     implicit val timeout = config.serverDefaultTimeout
 
     val context = new DefaultComponentContextImpl(bc)
-    val registry = new DefaultRegistryImpl(context)
+    val registry = new EtcdRegistryImpl(context, config)
     val messageFabric = MessageFabric.create(config.zookeeperHosts.mkString(","), config.zkMinBackOff, config.zkMaxBackOff)
 
     val result = for {
@@ -94,7 +94,7 @@ object Platform extends LazyLogging {
     implicit val timeout = config.serverDefaultTimeout
 
     val context = new DefaultComponentContextImpl(bc)
-    val registry = new DefaultRegistryImpl(context)
+    val registry = new EtcdRegistryImpl(context, config)
     val messageFabric = MessageFabric.create(config.zookeeperHosts.mkString(","), config.zkMinBackOff, config.zkMaxBackOff)
 
 

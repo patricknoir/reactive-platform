@@ -22,7 +22,7 @@ object SimpleClient extends App {
 
   implicit val system = ActorSystem("platformClient")
   implicit val materializer = ActorMaterializer()
-  implicit val timeout = Timeout(100 seconds)
+  implicit val timeout = Timeout(1 second)
 
   import system.dispatcher
 
@@ -31,8 +31,8 @@ object SimpleClient extends App {
   var input = ""
 
   while(input != "exit") {
-    val cmd = IncrementCounterIfCmd("Counter1", 1, 0)
-    val cResp = client.request[IncrementCounterIfCmd, CounterIncrementedEvt]("kafka:counterBC_1.0.0_commands/incrementIfCmd", cmd)
+    val cmd = IncrementCounterCmd("Counter1", 1)
+    val cResp = client.send[IncrementCounterCmd]("kafka:counterBC_1.0.0_commands/incrementCmd", cmd, confirmSend = true)
     println("Response is: " + Try(Await.result(cResp, Duration.Inf)))
 
     val req = CounterValueReq("Counter1")

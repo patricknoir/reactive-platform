@@ -10,7 +10,7 @@ import org.patricknoir.kafka.reactive.common.{ReactiveDeserializer, ReactiveSeri
 import org.patricknoir.platform.Util.CounterValueResp
 import org.patricknoir.platform.dsl.PlatformConfig
 import org.patricknoir.platform.protocol._
-import org.patricknoir.platform.runtime.{BoundedContextInfo, DefaultRegistryImpl, MessageFabric}
+import org.patricknoir.platform.runtime.{BoundedContextInfo, DefaultRegistryImpl, EtcdRegistryImpl, MessageFabric}
 import sun.reflect.generics.reflectiveObjects.NotImplementedException
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -236,7 +236,7 @@ case class DefaultComponentContextImpl(bc: BoundedContext)(implicit system: Acto
 
   private implicit val timeout =  config.serverDefaultTimeout
 
-  private val registry = new DefaultRegistryImpl(this)
+  private val registry = new EtcdRegistryImpl(this, config)
 
   private implicit val materializer = ActorMaterializer()
 
