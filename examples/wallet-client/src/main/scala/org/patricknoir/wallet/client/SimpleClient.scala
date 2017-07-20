@@ -7,6 +7,8 @@ import org.patricknoir.kafka.reactive.client.ReactiveKafkaClient
 import org.patricknoir.kafka.reactive.client.config.KafkaReactiveClientConfig
 import org.patricknoir.wallet.protocol.command.WalletCreateCmd
 import io.circe.generic.auto._
+import org.patricknoir.wallet.protocol.request.GetBalanceReq
+import org.patricknoir.wallet.protocol.response.GetBalanceRes
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -18,14 +20,24 @@ object SimpleClient extends App {
 
   implicit val system = ActorSystem("platformClient")
   implicit val materializer = ActorMaterializer()
-  implicit val timeout = Timeout(100 seconds)
+  implicit val timeout = Timeout(10 seconds)
 
   val client = new ReactiveKafkaClient(KafkaReactiveClientConfig.default())
 
   val createWallet = WalletCreateCmd("1", 100, true)
 
+  println(s"Sending command: $createWallet")
   val sendConfirm = client.send("kafka:walletSystem_1.0.0_commands/walletCreateCmd", createWallet, true)
-
   Await.ready(sendConfirm, Duration.Inf)
+  println(s"Command sent confirmation: $sendConfirm")
 
+  println("Retrieving balance for walletId = 1")
+  val req = GetBalanceReq("1")
+  val fResp = client.request[GetBalanceReq, GetBalanceRes]("kafka:walletSystem_1.0.0_requests/getBalanceReq", req)
+  val resp = Await.result(fResp, Duration.Inf)
+  println(s"Balance is: $resp")
+
+  println("System shutting down")
+  Await.ready(system.terminate(), Duration.Inf)
+  println("System terminated")
 }
