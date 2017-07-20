@@ -8,14 +8,24 @@ services:
       - "2380:2380"
       - "4001:4001"
     environment:
-      ETCD_NAME: infra1
+      ETCD_NAME: etcd1
       ETCD_INITIAL_ADVERTISE_PEER_URLS: http://etcd1:2380
-      ETCD_INITIAL_CLUSTER: infra1=http://etcd1:2380
+      ETCD_INITIAL_CLUSTER: etcd1=http://etcd1:2380
       ETCD_INITIAL_CLUSTER_STATE: new
       ETCD_INITIAL_CLUSTER_TOKEN: etcd-tasting-01
-      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379,http://0.0.0.0:2379
+      ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379,http://0.0.0.0:4001
       ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
       ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
+  etcdbrowser1:
+    image: patricknoir/etcd-browser
+    hostname: etcdbrowser1
+    ports:
+      - "8000:8000"
+    environment:
+      ETCD_HOST: etcd1
+      AUTH_PASS: doe
+    depends_on:
+      - etcd1
   zoo1:
     image: zookeeper:3.4.9
     restart: always
