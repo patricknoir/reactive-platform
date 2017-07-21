@@ -40,8 +40,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
 
   override def receiveRecover: Receive = {
     case eventRecover: EventRecover[T] =>
-      val (newState, _) = eventRecover.stateM.run(model).value
-      model = newState
+      model = eventRecover.model
       isWaitingComplete = None
     case wc: WaitingComplete =>
       isWaitingComplete = Some(wc)
@@ -78,14 +77,14 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
     }
   }
 
-  private def handleCtxCommand(css: ContextStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef) = {
+  private def handleCtxCommand(css: ContextStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef): Try[Unit] = {
     Try {
       css.func(ctx, cmd)
     }.map { stateM =>
-      persist(EventRecover(stateM)) { event =>
-        val state = event.stateM
-        val (newModel, events) = state.run(model).value
-        log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
+      val (newModel, events) = stateM.run(this.model).value
+      log.info(s"about to persist: $stateM")
+      persist(EventRecover(newModel)) { er =>
+        log.info(s"Internal state for entity: $persistenceId updated to: $er")
         updateStateAndReply((newModel, events), origin)
       }
     }.recover { case err: Throwable =>
@@ -97,9 +96,8 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
     Try {
       svc.func(cmd)
     }.map { stateM =>
-        persist(EventRecover(stateM)) { event =>
-          val state = event.stateM
-          val (newModel, events) = state.run(model).value
+        val (newModel, events) = stateM.run(model).value
+        persist(EventRecover(stateM)) { er =>
           log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
           updateStateAndReply((newModel, events), origin)
         }
@@ -146,7 +144,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
           err => reportErrorAndReply(err, cc.cmd, origin),
           stateAndEvents => {
             val (s, evts) = stateAndEvents
-            val eventRecover = EventRecover[T](State[T, Seq[Event]](_ => (s, evts)))
+            val eventRecover = EventRecover[T](s)
             persist(eventRecover) { _ =>
               updateStateAndReply(stateAndEvents, cc.origin)
               restoreBehaviour()
@@ -168,9 +166,9 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
     unstashAll()
   }
 
-  private def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_.service).find(_.func.isDefinedAt(ctx, cmd))
-  private def findServiceForEvent(evt: Event) = processor.eventModifiers.map(_.service).find(_.func.isDefinedAt(ctx, evt))
-  private def findServiceForQuery(req: Request) = processor.queries.map(_.service).find(_.func.isDefinedAt(ctx, req))
+  private def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_.service).find(_.func.isDefinedAt((ctx, cmd)))
+  private def findServiceForEvent(evt: Event) = processor.eventModifiers.map(_.service).find(_.func.isDefinedAt((ctx, evt)))
+  private def findServiceForQuery(req: Request) = processor.queries.map(_.service).find(_.func.isDefinedAt((ctx, req)))
 
 }
 
@@ -178,7 +176,7 @@ object ProcessorActor {
   def props(ctx: ComponentContext, processor: Processor[_])(implicit timeout: Timeout): Props = Props(new ProcessorActor(ctx, processor, timeout))
   case class CompleteCommand[S](cmd: Command, result: Either[Throwable, (S, Seq[Event])], origin: ActorRef)
 
-  case class EventRecover[S](stateM: State[S, Seq[Event]])
+  case class EventRecover[S](model: S)
   case class WaitingComplete(cmd: Command, origin: ActorRef)
   case object Processing
 }

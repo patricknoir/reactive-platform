@@ -79,6 +79,7 @@ val walletService = project
   .settings(commonSettings)
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(protocol, root)
+  .enablePlugins(DockerPlugin, AshScriptPlugin)
 
 val walletClient = project.in(file("examples/wallet-client"))
   .settings(commonSettings)

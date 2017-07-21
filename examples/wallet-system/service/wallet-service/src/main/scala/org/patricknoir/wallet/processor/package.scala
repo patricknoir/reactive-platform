@@ -10,7 +10,7 @@ import org.patricknoir.wallet.protocol.request.GetBalanceReq
 import org.patricknoir.wallet.protocol.response.GetBalanceRes
 
 /**
-  * Created by patrick on 30/03/2017.
+  * Processors modifiers and queries
   */
 package object processor {
 
@@ -45,6 +45,8 @@ package object processor {
     GetBalanceRes(req.walletId, optWallet.map(_.amount))
   }
 
+  // === Processor Descriptor === //
+
   val shardingDescriptor = KeyShardedProcessDescriptor(
     commandKeyExtractor = {
       case cmd @ WalletCreateCmd(id, _, _) => (id, cmd)
@@ -59,6 +61,8 @@ package object processor {
     hashFunction = _.hashCode,
     shardSpaceSize = 100
   )
+
+  // === Processor Definiiton === //
 
   val walletProcessor = Processor[Option[Wallet]](
     id = "walletProcessor",
