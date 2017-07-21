@@ -30,7 +30,7 @@ package object processor {
     }
   }
 
-  val creditWalletReducer: CtxCmdInfo[Option[Wallet]] = command("creditCmd") { (_: ComponentContext, optWallet: Option[Wallet], cmd: CreditCmd) =>
+  val creditWalletCmd: CtxCmdInfo[Option[Wallet]] = command("creditCmd") { (_: ComponentContext, optWallet: Option[Wallet], cmd: CreditCmd) =>
     optWallet.fold(
       throw new RuntimeException(s"Wallet ${cmd.id} is not active")
     )
@@ -72,7 +72,7 @@ package object processor {
     commandModifiers = Set(
       createWalletCmd,
       debitWalletCmd,
-      createWalletCmd
+      creditWalletCmd
     ),
     queries = Set(getBalanceReq)
   )
