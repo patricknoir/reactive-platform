@@ -86,6 +86,23 @@ val walletClient = project.in(file("examples/wallet-client"))
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(protocol, root)
 
+val bettingSystem = project.in(file("examples/betting-system"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(root)
+
+val bettingProtocol = project.in(file("examples/betting-system/protocol"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(root, protocol)
+
+val bettingService = project
+  .in(file("examples/betting-system/service/betting-service"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(bettingProtocol, root)
+  .enablePlugins(DockerPlugin, AshScriptPlugin)
+
 lazy val publishSite = taskKey[Unit]("publish the site under /docs")
 val dest = (baseDirectory / "docs")
 

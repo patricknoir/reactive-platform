@@ -6,10 +6,10 @@ import akka.util.Timeout
 import org.patricknoir.kafka.reactive.client.ReactiveKafkaClient
 import org.patricknoir.kafka.reactive.client.config.KafkaReactiveClientConfig
 import org.patricknoir.wallet.protocol.command.WalletCreateCmd
-import io.circe.generic.auto._
+
 import org.patricknoir.wallet.protocol.request.GetBalanceReq
 import org.patricknoir.wallet.protocol.response.GetBalanceRes
-
+import io.circe.generic.auto._
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -36,6 +36,7 @@ object SimpleClient extends App {
   val fResp = client.request[GetBalanceReq, GetBalanceRes]("kafka:walletSystem_1.0.0_requests/getBalanceReq", req)
   val resp = Await.result(fResp, Duration.Inf)
   println(s"Balance is: $resp")
+
 
   println("System shutting down")
   Await.ready(system.terminate(), Duration.Inf)
