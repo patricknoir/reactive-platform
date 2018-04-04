@@ -6,11 +6,11 @@ import akka.util.Timeout
 import org.patricknoir.kafka.reactive.client.ReactiveKafkaClient
 import org.patricknoir.kafka.reactive.client.config.KafkaReactiveClientConfig
 import org.patricknoir.wallet.protocol.command.WalletCreateCmd
-
 import org.patricknoir.wallet.protocol.request.GetBalanceReq
 import org.patricknoir.wallet.protocol.response.GetBalanceRes
 import io.circe.generic.auto._
-import scala.concurrent.Await
+
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
 /**
@@ -24,16 +24,16 @@ object SimpleClient extends App {
 
   val client = new ReactiveKafkaClient(KafkaReactiveClientConfig.default())
 
-  val createWallet = WalletCreateCmd("1", 100, true)
-
-  println(s"Sending command: $createWallet")
-  val sendConfirm = client.send("kafka:walletSystem_1.0.0_commands/walletCreateCmd", createWallet, true)
-  Await.ready(sendConfirm, Duration.Inf)
-  println(s"Command sent confirmation: $sendConfirm")
+//  val createWallet = WalletCreateCmd("1", 100, true)
+//
+//  println(s"Sending command: $createWallet")
+//  val sendConfirm: Future[Unit] = client.send("kafka:walletSystem_1.0.0_commands/walletCreateCmd", createWallet, confirmSend = true)
+//  Await.ready(sendConfirm, Duration.Inf)
+//  println(s"Command sent confirmation: $sendConfirm")
 
   println("Retrieving balance for walletId = 1")
   val req = GetBalanceReq("1")
-  val fResp = client.request[GetBalanceReq, GetBalanceRes]("kafka:walletSystem_1.0.0_requests/getBalanceReq", req)
+  val fResp: Future[GetBalanceRes] = client.request[GetBalanceReq, GetBalanceRes]("kafka:walletSystem_1.0.0_requests/getBalanceReq", req)
   val resp = Await.result(fResp, Duration.Inf)
   println(s"Balance is: $resp")
 

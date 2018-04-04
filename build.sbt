@@ -69,7 +69,18 @@ val walletSystem = project.in(file("examples/wallet-system"))
   .dependsOn(root)
   .enablePlugins(DockerPlugin, AshScriptPlugin)
 
+val accountSystem = project.in(file("examples/account-system"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(root)
+  .enablePlugins(DockerPlugin, AshScriptPlugin)
+
 val protocol = project.in(file("examples/wallet-system/protocol"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(root)
+
+val accountProtocol = project.in(file("examples/account-system/protocol"))
   .settings(commonSettings)
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(root)
@@ -79,6 +90,13 @@ val walletService = project
   .settings(commonSettings)
   .settings(libraryDependencies ++= commonDependencies)
   .dependsOn(protocol, root)
+  .enablePlugins(DockerPlugin, AshScriptPlugin)
+
+val accountService = project
+  .in(file("examples/account-system/service/account-service"))
+  .settings(commonSettings)
+  .settings(libraryDependencies ++= commonDependencies)
+  .dependsOn(accountProtocol, root)
   .enablePlugins(DockerPlugin, AshScriptPlugin)
 
 val walletClient = project.in(file("examples/wallet-client"))
@@ -104,7 +122,7 @@ val bettingService = project
   .enablePlugins(DockerPlugin, AshScriptPlugin)
 
 lazy val publishSite = taskKey[Unit]("publish the site under /docs")
-val dest = (baseDirectory / "docs")
+val dest = baseDirectory / "docs"
 
 lazy val documentation =
   project

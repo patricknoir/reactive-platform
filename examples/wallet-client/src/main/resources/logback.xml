@@ -11,7 +11,7 @@
     <!--<logger name="org.akka" level="${LOG_LEVEL:-TRACE}"/>-->
     <logger name="org.apache.kafka" level="ERROR"/>
 
-    <root level="DEBUG">
+    <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 

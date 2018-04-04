@@ -62,7 +62,7 @@ package object processor {
     shardSpaceSize = 100
   )
 
-  // === Processor Definiiton === //
+  // === Processor Definition === //
 
   val walletProcessor = Processor[Option[Wallet]](
     id = "walletProcessor",

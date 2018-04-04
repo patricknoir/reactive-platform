@@ -56,6 +56,13 @@ package object dsl {
       ContextStatefulServiceInfo[S, Command, Seq[Event]](ContextStatefulService.sync[S, Command, Seq[Event]](id, fc), deserializer, serializer)
     }
 
+    def simpleApply[C <: Command, E <: Event, S](id: String)(modifier: (S, C) => (S, Seq[E]))(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
+      val fc: PartialFunction[(ComponentContext, Command), State[S, Seq[Event]]] = {
+        case (ctx: ComponentContext, cmd: C) => State(init => modifier(init, cmd))
+      }
+      ContextStatefulServiceInfo[S, Command, Seq[Event]](ContextStatefulService.sync[S, Command, Seq[Event]](id, fc), deserializer, serializer)
+    }
+
     def async[C <: Command, E <: Event, S](id: String)(timeout: Timeout, modifier: (ComponentContext, S, C) => Future[(S, Seq[E])])(implicit ct: ClassTag[C], ect: ClassTag[E], deserializer: ReactiveDeserializer[C], serializer: ReactiveSerializer[Seq[E]]) = {
       val fc: PartialFunction[(ComponentContext, Command), State[S, Seq[Event]]] = {
         case (ctx: ComponentContext, cmd: C) =>

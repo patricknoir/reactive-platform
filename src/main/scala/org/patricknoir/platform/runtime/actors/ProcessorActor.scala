@@ -54,7 +54,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
   }
 
   private def handleRequest(req: Request, origin: ActorRef) = {
-    log.debug(s"Receoved request: $req")
+    log.debug(s"Received request: $req")
     findServiceForQuery(req).map { service =>
       log.debug(s"Service for request: $req found: ${service.id}")
       val resp = service.func(ctx, req).run(model).value._2
@@ -82,9 +82,9 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
       css.func(ctx, cmd)
     }.map { stateM =>
       val (newModel, events) = stateM.run(this.model).value
-      log.info(s"about to persist: $stateM")
+      log.info(s"about to persist: $newModel")
       persist(EventRecover(newModel)) { er =>
-        log.info(s"Internal state for entity: $persistenceId updated to: $er")
+        log.info(s"Internal state for entity: $persistenceId updated to: ${er.model}")
         updateStateAndReply((newModel, events), origin)
       }
     }.recover { case err: Throwable =>
@@ -127,6 +127,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
   }
 
   private def updateStateAndReply(valueAndEvents: (T, Seq[Event]), origin: ActorRef) = {
+    log.info("Updating current state with: {}", valueAndEvents._1)
     model = valueAndEvents._1
     origin ! valueAndEvents._2
   }

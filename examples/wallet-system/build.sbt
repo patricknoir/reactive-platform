@@ -1,1 +1,1 @@
-name := "wallet-system"
+name := "account-system"
