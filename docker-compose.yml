@@ -38,17 +38,16 @@ services:
         ZOO_SERVERS: server.1=zoo1:2888:3888
 
   kafka1:
-    image: confluentinc/cp-kafka:3.1.2
+    image: wurstmeister/kafka
     hostname: kafka1
     ports:
       - "9092:9092"
     environment:
       # add the entry "127.0.0.1    kafka1" to your /etc/hosts file
-      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka1:9092"
+      KAFKA_ADVERTISED_HOST_NAME: "kafka1"
       KAFKA_ZOOKEEPER_CONNECT: "zoo1:2181"
-      KAFKA_BROKER_ID: 1
-      HOSTNAME: "kafka1"
-      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
+      KAFKA_CREATE_TOPICS: "responseInbound:1:1"
+#      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
     depends_on:
       - zoo1
 #  server:
@@ -64,34 +63,43 @@ services:
   walletSeed:
     image: patricknoir/wallet-service:1.0.0-SNAPSHOT
     hostname: "walletSeed"
+    ports:
+      - 7552
     environment:
       NODE_HOSTNAME: "walletSeed"
+      NODE_PORT: 7552
       NODE_SEED: "walletSeed:7552"
       REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
     depends_on:
       - kafka1
       - etcd1
-#  wallet2:
-#      image: patricknoir/wallet-service:1.0.0-SNAPSHOT
-#      hostname: "wallet2"
-#      environment:
-#        NODE_HOSTNAME: "wallet2"
-#        NODE_SEED: "walletSeed:7552"
-#        REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
-#      depends_on:
-#        - walletSeed
-#        - kafka1
-#        - zoo1
-#        - etcd1
-#  wallet3:
-#      image: patricknoir/wallet-service:1.0.0-SNAPSHOT
-#      hostname: "wallet3"
-#      environment:
-#        NODE_HOSTNAME: "wallet3"
-#        NODE_SEED: "walletSeed:7552"
-#        REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
-#      depends_on:
-#        - walletSeed
-#        - kafka1
-#        - zoo1
-#        - etcd1
+  wallet2:
+      image: patricknoir/wallet-service:1.0.0-SNAPSHOT
+      hostname: "wallet2"
+      ports:
+        - 7552
+      environment:
+        NODE_HOSTNAME: "wallet2"
+        NODE_PORT: 7552
+        NODE_SEED: "walletSeed:7552"
+        REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
+      depends_on:
+        - walletSeed
+        - kafka1
+        - zoo1
+        - etcd1
+  wallet3:
+      image: patricknoir/wallet-service:1.0.0-SNAPSHOT
+      hostname: "wallet3"
+      ports:
+        - 7552
+      environment:
+        NODE_HOSTNAME: "wallet3"
+        NODE_PORT: 7552
+        NODE_SEED: "walletSeed:7552"
+        REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
+      depends_on:
+        - walletSeed
+        - kafka1
+        - zoo1
+        - etcd1
