@@ -18,6 +18,7 @@ val Versions = new {
   val Cats = "0.9.0"
   val ReactiveSystem = "0.3.1"
   val Akka = "2.4.17"
+  val AkkaCassandra = "0.30"
   val Kafka = "0.10.2.0"
 }
 
@@ -33,6 +34,7 @@ val commonDependencies = Seq(
   "com.typesafe.akka"               %% "akka-cluster"               % Versions.Akka,
   "com.typesafe.akka"               %% "akka-cluster-metrics"       % Versions.Akka,
   "com.typesafe.akka"               %% "akka-cluster-sharding"      % Versions.Akka,
+  "com.typesafe.akka"               %% "akka-persistence-cassandra" % Versions.AkkaCassandra,
   "com.typesafe.scala-logging"      %% "scala-logging"              % "3.5.0",
   "ch.qos.logback"                  %  "logback-classic"            % "1.1.3",
   "org.iq80.leveldb"                %  "leveldb"                    % "0.7",

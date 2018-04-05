@@ -16,6 +16,7 @@ services:
       ETCD_LISTEN_CLIENT_URLS: http://0.0.0.0:2379,http://0.0.0.0:4001
       ETCD_LISTEN_PEER_URLS: http://0.0.0.0:2380
       ETCD_ADVERTISE_CLIENT_URLS: http://etcd1:2379
+
   etcdbrowser1:
     image: patricknoir/etcd-browser
     hostname: etcdbrowser1
@@ -26,6 +27,7 @@ services:
       AUTH_PASS: doe
     depends_on:
       - etcd1
+
   zoo1:
     image: zookeeper:3.4.9
     restart: always
@@ -50,6 +52,7 @@ services:
 #      KAFKA_LOG4J_LOGGERS: "kafka.controller=INFO,kafka.producer.async.DefaultEventHandler=INFO,state.change.logger=INFO"
     depends_on:
       - zoo1
+
 #  server:
 #    image: patricknoir/server:1.0.0-SNAPSHOT
 #    ports:
@@ -60,6 +63,17 @@ services:
 #      - kafka1
 #      - zoo1
 #      - etcd1
+
+  cassandra1:
+    image: cassandra:3.11
+    restart: unless-stopped
+    ports:
+      - "7000:7000"
+      - "7001:7001"
+      - "7199:7199"
+      - "9042:9042"
+      - "9160:9160"
+
   walletSeed:
     image: patricknoir/wallet-service:1.0.0-SNAPSHOT
     hostname: "walletSeed"
@@ -73,6 +87,8 @@ services:
     depends_on:
       - kafka1
       - etcd1
+      - cassandra1
+
   wallet2:
     image: patricknoir/wallet-service:1.0.0-SNAPSHOT
     hostname: "wallet2"
@@ -88,6 +104,8 @@ services:
       - kafka1
       - zoo1
       - etcd1
+      - cassandra1
+
   wallet3:
     image: patricknoir/wallet-service:1.0.0-SNAPSHOT
     hostname: "wallet3"
@@ -103,3 +121,4 @@ services:
       - kafka1
       - zoo1
       - etcd1
+      - cassandra1
