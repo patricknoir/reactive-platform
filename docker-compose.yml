@@ -63,43 +63,43 @@ services:
   walletSeed:
     image: patricknoir/wallet-service:1.0.0-SNAPSHOT
     hostname: "walletSeed"
-    ports:
-      - "7552:7552"
+    expose:
+      - "7552"
     environment:
       NODE_HOSTNAME: "walletSeed"
       NODE_PORT: 7552
-      NODE_SEED: "walletSeed:7552"
+      NODE_SEED: "akka.tcp://walletSystem@walletSeed:7552"
       REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
     depends_on:
       - kafka1
       - etcd1
   wallet2:
-      image: patricknoir/wallet-service:1.0.0-SNAPSHOT
-      hostname: "wallet2"
-      ports:
-        - "7553:7552"
-      environment:
-        NODE_HOSTNAME: "wallet2"
-        NODE_PORT: 7552
-        NODE_SEED: "walletSeed:7552"
-        REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
-      depends_on:
-        - walletSeed
-        - kafka1
-        - zoo1
-        - etcd1
+    image: patricknoir/wallet-service:1.0.0-SNAPSHOT
+    hostname: "wallet2"
+    expose:
+      - "7552"
+    environment:
+      NODE_HOSTNAME: "wallet2"
+      NODE_PORT: 7552
+      NODE_SEED: "akka.tcp://walletSystem@walletSeed:7552"
+      REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
+    depends_on:
+      - walletSeed
+      - kafka1
+      - zoo1
+      - etcd1
   wallet3:
-      image: patricknoir/wallet-service:1.0.0-SNAPSHOT
-      hostname: "wallet3"
-      ports:
-        - "7554:7552"
-      environment:
-        NODE_HOSTNAME: "wallet3"
-        NODE_PORT: 7552
-        NODE_SEED: "walletSeed:7552"
-        REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
-      depends_on:
-        - walletSeed
-        - kafka1
-        - zoo1
-        - etcd1
+    image: patricknoir/wallet-service:1.0.0-SNAPSHOT
+    hostname: "wallet3"
+    expose:
+      - "7552"
+    environment:
+      NODE_HOSTNAME: "wallet3"
+      NODE_PORT: 7552
+      NODE_SEED: "akka.tcp://walletSystem@walletSeed:7552"
+      REACTIVE_PLATFORM_LOG_LEVEL: "DEBUG"
+    depends_on:
+      - walletSeed
+      - kafka1
+      - zoo1
+      - etcd1

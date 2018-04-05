@@ -48,7 +48,7 @@ object Platform extends LazyLogging {
     val reference = ConfigFactory.load()
     val serverHost = reference.getString("akka.remote.netty.tcp.hostname")
     val serverPort = reference.getInt("akka.remote.netty.tcp.port")
-    implicit val akkaConfig = reference.withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@$serverHost:$serverPort")))
+    implicit val akkaConfig = reference  //.withValue("akka.cluster.seed-nodes", ConfigValueFactory.fromIterable(List(s"akka.tcp://${bc.id}@$serverHost:$serverPort")))
     implicit val system = ActorSystem(bc.id, akkaConfig)
     implicit val materializer = ActorMaterializer()
     import system.dispatcher
