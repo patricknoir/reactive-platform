@@ -73,6 +73,7 @@ services:
     depends_on:
       - kafka1
       - etcd1
+      - cassandra
   wallet2:
     image: patricknoir/wallet-service:1.0.0-SNAPSHOT
     hostname: "wallet2"
@@ -88,6 +89,7 @@ services:
       - kafka1
       - zoo1
       - etcd1
+      - cassandra
   wallet3:
     image: patricknoir/wallet-service:1.0.0-SNAPSHOT
     hostname: "wallet3"
@@ -103,3 +105,14 @@ services:
       - kafka1
       - zoo1
       - etcd1
+      - cassandra
+  cassandra:
+    image: cassandra:3.11.2
+    hostname: cassandra
+    expose:
+      - 9042
+      - 9160
+      - 9142
+      - 7000
+      - 7001
+      - 7199

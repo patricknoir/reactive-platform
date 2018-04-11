@@ -136,15 +136,19 @@ object Platform extends LazyLogging {
     val groupName = bc.id + "_" + bc.version.toString
     val topicPrefix = bc.id + "_" + bc.version.toString + "_"
 
-    val commandSource = ReactiveKafkaSource.atLeastOnce(bc.fullCommandMailboxName, config.messageFabricServers, topicPrefix + bc.commandMailboxName + "_consumer", groupName)
-    val requestSource = ReactiveKafkaSource.atLeastOnce(bc.fullRequestMailboxName, config.messageFabricServers, topicPrefix + bc.requestMailboxName + "_consumer", groupName)
+    val commandSource = ReactiveKafkaSource.create(bc.fullCommandMailboxName, config.messageFabricServers, topicPrefix + bc.commandMailboxName + "_consumer", groupName, 1)
+    val requestSource = ReactiveKafkaSource.create(bc.fullRequestMailboxName, config.messageFabricServers, topicPrefix + bc.requestMailboxName + "_consumer", groupName, 1)
 
-    val commandFlow = Flow[(CommittableMessage[String, String], Future[KafkaResponseEnvelope])].map{ case (c, fResp) =>
-      (c, fResp.map(_.copy(replyTo = bc.fullEventMailboxName)))
+//    val commandFlow = Flow[(CommittableMessage[String, String], Future[KafkaResponseEnvelope])].map{ case (c, fResp) =>
+//      (c, fResp.map(_.copy(replyTo = bc.fullEventMailboxName)))
+//    }
+
+    val commandFlow = Flow[Future[KafkaResponseEnvelope]].map{ fResp =>
+      fResp.map(_.copy(replyTo = bc.fullEventMailboxName))
     }
 
-    val commandSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers, 4, 10, 1 second)
-    val responseSink = ReactiveKafkaSink.atLeastOnce(config.messageFabricServers, 4, 10, 1 second)
+    val commandSink = ReactiveKafkaSink.create(config.messageFabricServers, 1)
+    val responseSink = ReactiveKafkaSink.create(config.messageFabricServers, 1)
 
     val cmdRS = commandSource ~> createCommandRoute(processor.commandModifiers, server) ~> (commandFlow to commandSink)
     val reqRS = requestSource ~> createRequestRoute(processor.queries, server) ~> responseSink

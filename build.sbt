@@ -16,8 +16,8 @@ val commonSettings = Seq(
 val Versions = new {
   val Circe = "0.7.0"
   val Cats = "0.9.0"
-  val ReactiveSystem = "0.3.1"
-  val Akka = "2.4.17"
+  val ReactiveSystem = "0.4.0-SNAPSHOT"
+  val Akka = "2.5.2"
   val Kafka = "0.10.2.0"
 }
 
@@ -40,6 +40,10 @@ val commonDependencies = Seq(
   "org.apache.kafka"                %%  "kafka"                     % Versions.Kafka,
   "com.orbitz.consul"               % "consul-client"               % "0.14.0",
   "org.mousio"                      % "etcd4j"                      % "2.13.0"
+)
+
+val persistenceDependencies = Seq(
+  "com.typesafe.akka" %% "akka-persistence-cassandra" % "0.30"
 )
 
 
@@ -88,7 +92,7 @@ val accountProtocol = project.in(file("examples/account-system/protocol"))
 val walletService = project
   .in(file("examples/wallet-system/service/wallet-service"))
   .settings(commonSettings)
-  .settings(libraryDependencies ++= commonDependencies)
+  .settings(libraryDependencies ++= (commonDependencies ++ persistenceDependencies))
   .dependsOn(protocol, root)
   .enablePlugins(DockerPlugin, AshScriptPlugin)
 
