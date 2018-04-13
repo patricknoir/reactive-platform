@@ -22,6 +22,8 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
   val defaulEc: ExecutionContext = context.dispatcher
   val asyncCmdEc: ExecutionContext = context.system.dispatchers.lookup(context.system.settings.config.getString("platform.server.async-command-dispatcher"))
 
+  log.debug("ProcessorActor: {} created", self.path.name)
+
   override val persistenceId = self.path.name
 
   var model: T = processor.model
@@ -39,6 +41,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
   var isWaitingComplete: Option[WaitingComplete] = None
 
   override def receiveRecover: Receive = {
+    case event: Event =>
     case eventRecover: EventRecover[T] =>
       model = eventRecover.model
       isWaitingComplete = None
@@ -82,11 +85,19 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
       css.func(ctx, cmd)
     }.map { stateM =>
       val (newModel, events) = stateM.run(this.model).value
-      log.info(s"about to persist: $newModel")
-      persist(EventRecover(newModel)) { er =>
-        log.info(s"Internal state for entity: $persistenceId updated to: ${er.model}")
-        updateStateAndReply((newModel, events), origin)
+      log.info(s"about to persist: $events")
+      events.map { event =>
+//        persist(event) { event =>
+//          log.info("Event: {} persistend in the entity event-journal", event)
+//          updateStateAndReply((newModel, events), origin)
+//        }
+          persist(EventRecover(newModel)) { er =>
+            log.info(s"Internal state for entity: $persistenceId updated to: ${er.model}")
+            updateStateAndReply((newModel, events), origin)
+          }
+
       }
+      () //FIXME - We should remove Seq[Evt] and go back to Evt
     }.recover { case err: Throwable =>
       reportErrorAndReply(err, cmd, origin)
     }

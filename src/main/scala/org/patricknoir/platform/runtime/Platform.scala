@@ -125,13 +125,14 @@ object Platform extends LazyLogging {
     }
     val extractShardIdFunction = extractIdFunction.andThen(res => (descriptor.hashFunction(res._1) % descriptor.shardSpaceSize).toString)
 
-    val server = ClusterSharding(system).start(
+    val server: ActorRef = ClusterSharding(system).start(
       typeName = processor.id,
       entityProps = ProcessorActor.props(ctx, processor),
       settings = ClusterShardingSettings(system),
       extractEntityId = extractIdFunction,
       extractShardId = extractShardIdFunction
     )
+
 
     val groupName = bc.id + "_" + bc.version.toString
     val topicPrefix = bc.id + "_" + bc.version.toString + "_"

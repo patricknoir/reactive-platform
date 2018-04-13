@@ -11,8 +11,9 @@
     <!--<logger name="org.akka" level="${LOG_LEVEL:-TRACE}"/>-->
     <logger name="akka" level="WARN"/>
     <logger name="org.apache.kafka" level="WARN" />
+    <logger name="org.patricknoir" level="DEBUG" />
 
-    <root level="DEBUG">
+    <root level="WARN">
         <appender-ref ref="CONSOLE"/>
     </root>
 
