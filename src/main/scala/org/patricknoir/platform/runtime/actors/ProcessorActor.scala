@@ -42,6 +42,11 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
 
   override def receiveRecover: Receive = {
     case event: Event =>
+      findServiceForRecovery(event).map { service =>
+        log.debug("Recovering applying event: {} on state: {}", event, model)
+        val res: State[T, Unit] = service.func(event)
+        this.model = res.run(this.model).value._1
+      }
     case eventRecover: EventRecover[T] =>
       model = eventRecover.model
       isWaitingComplete = None
@@ -87,14 +92,14 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
       val (newModel, events) = stateM.run(this.model).value
       log.info(s"about to persist: $events")
       events.map { event =>
-//        persist(event) { event =>
-//          log.info("Event: {} persistend in the entity event-journal", event)
-//          updateStateAndReply((newModel, events), origin)
-//        }
-          persist(EventRecover(newModel)) { er =>
-            log.info(s"Internal state for entity: $persistenceId updated to: ${er.model}")
-            updateStateAndReply((newModel, events), origin)
-          }
+        persist(event) { event =>
+          log.info("Event: {} persistend in the entity event-journal", event)
+          updateStateAndReply((newModel, events), origin)
+        }
+//          persist(EventRecover(newModel)) { er =>
+//            log.info(s"Internal state for entity: $persistenceId updated to: ${er.model}")
+//            updateStateAndReply((newModel, events), origin)
+//          }
 
       }
       () //FIXME - We should remove Seq[Evt] and go back to Evt
@@ -181,6 +186,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
   private def findServiceForCommand(cmd: Command) = processor.commandModifiers.map(_.service).find(_.func.isDefinedAt((ctx, cmd)))
   private def findServiceForEvent(evt: Event) = processor.eventModifiers.map(_.service).find(_.func.isDefinedAt((ctx, evt)))
   private def findServiceForQuery(req: Request) = processor.queries.map(_.service).find(_.func.isDefinedAt((ctx, req)))
+  private def findServiceForRecovery(evt: Event) = processor.recover.find(_.func.isDefinedAt(evt))
 
 }
 

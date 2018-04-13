@@ -1,6 +1,6 @@
 package org.patricknoir.wallet
 
-import org.patricknoir.platform._
+import org.patricknoir.platform.{protocol, _}
 import org.patricknoir.platform.dsl._
 import org.patricknoir.wallet.domain.Wallet
 import org.patricknoir.wallet.protocol.command.{CreditCmd, DebitCmd, WalletCreateCmd}
@@ -45,6 +45,18 @@ package object processor {
     GetBalanceRes(req.walletId, optWallet.map(_.amount))
   }
 
+  val recs: Set[Recovery[Option[Wallet]]] = Set(
+    recovery("walletCreatedEvtRec") { (_: Option[Wallet], evt: WalletCreatedEvt) =>
+      Some(Wallet(evt.id, evt.amount, evt.active))
+    },
+    recovery("debitEvtRec") { (optWallet: Option[Wallet], evt: DebitedEvt) =>
+      optWallet.map(_.debit(evt.amount))
+    },
+    recovery("creditEvtRec") { (optWallet: Option[Wallet], evt: CreditedEvt) =>
+      optWallet.map(_.credit(evt.amount))
+    }
+  )
+
   // === Processor Descriptor === //
 
   val shardingDescriptor = KeyShardedProcessDescriptor(
@@ -74,7 +86,8 @@ package object processor {
       debitWalletCmd,
       creditWalletCmd
     ),
-    queries = Set(getBalanceReq)
+    queries = Set(getBalanceReq),
+    recover = recs
   )
 
 

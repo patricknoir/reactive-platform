@@ -127,6 +127,7 @@ sealed trait Component[T] {
   val descriptor: ComponentDescriptor
   val model: T
 //  val props: ComponentProps[T]
+  val recover: Set[Recovery[T]]
 }
 
 /**
@@ -158,7 +159,8 @@ sealed case class Processor[W](
   override val model: W,
   val commandModifiers: Set[CtxCmdInfo[W]] = Set.empty[CtxCmdInfo[W]],
   val eventModifiers: Set[CtxEvtInfo[W]] = Set.empty[CtxEvtInfo[W]],
-  val queries: Set[CtxAskInfo[W]] = Set.empty[CtxAskInfo[W]]
+  val queries: Set[CtxAskInfo[W]] = Set.empty[CtxAskInfo[W]],
+  override val recover: Set[Recovery[W]] = Set.empty[Recovery[W]]
 //  override val props: ProcessorProps[W]
 ) extends Component[W]
 
@@ -189,7 +191,8 @@ sealed case class View[R](
   override val descriptor: ViewDescriptor,
   override val model: R,
   val modifiers: Set[CtxEvtInfo[R]] = Set.empty[CtxEvtInfo[R]],
-  val queries: Set[CtxAskInfo[R]] = Set.empty[CtxAskInfo[R]]
+  val queries: Set[CtxAskInfo[R]] = Set.empty[CtxAskInfo[R]],
+  override val recover: Set[Recovery[R]] = Set.empty[Recovery[R]]
 //  override val props: ViewProps[R]
 ) extends Component[R]
 

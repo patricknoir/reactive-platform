@@ -74,6 +74,15 @@ package object dsl {
     }
   }
 
+  object recovery {
+    def apply[E <: Event, S](id: String)(rec: (S, E) => S)(implicit ect: ClassTag[E]): Recovery[S] = {
+      val pf: PartialFunction[Event, State[S, Unit]] = {
+        case event: E => State(init => (rec(init, event), ()))
+      }
+      StatefulService.sync[S, Event, Unit](id, pf)
+    }
+  }
+
   case class PlatformConfig(
     messageFabricServers: Set[String],
     zookeeperHosts: Set[String],
