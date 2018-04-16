@@ -40,31 +40,31 @@ object Boot extends App with LazyLogging {
     ),
     model = 0,
     commandModifiers = Set(
-      command("incrementCmd") { (context: ComponentContext, counter: Int, ic: IncrementCounterCmd) =>
-        context.log("incrementCmd").info("Called with {}", counter)
-        (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
-      },
-      command("decrementCmd") { (context: ComponentContext, counter: Int, ic: DecrementCounterCmd) =>
-        context.log("decrementCmd").info("Called with {}", counter)
-        (counter - ic.step, Seq(CounterDecrementedEvt(ic.id, ic.step)))
-      },
-      command.async("incrementIfCmd")(
+      command{ ctx => (counter: Int, ic: IncrementCounterCmd) =>
+        ctx.log("incrementCmd").info("Called with {}", counter)
+        (counter + ic.step, CounterIncrementedEvt(ic.id, ic.step))
+      }("incrementCmd"),
+      command { ctx =>  (counter: Int, ic: DecrementCounterCmd) =>
+        ctx.log("decrementCmd").info("Called with {}", counter)
+        (counter - ic.step, CounterDecrementedEvt(ic.id, ic.step))
+      }("decrementCmd"),
+      asyncCommand(
         timeout = Timeout(10 seconds),
         modifier = (context: ComponentContext, counter: Int, ic: IncrementCounterIfCmd) => {
           // Following handling is just for demo purposes
           context.request[CounterValueReq, CounterValueResp](ServiceURL("counterBC", Version(1, 0, 0), "counterProcessor"), CounterValueReq(ic.id)).map(resp =>
-            if (resp.value == ic.ifValue) (counter + ic.step, Seq(CounterIncrementedEvt(ic.id, ic.step)))
+            if (resp.value == ic.ifValue) (counter + ic.step, CounterIncrementedEvt(ic.id, ic.step))
             else throw new RuntimeException(s"Value ${ic.ifValue} does not match returned: ${resp.value}") // This is the same as failing the future
           )
         }
-      )
+      )("incrementIfCmd")
     ),
     eventModifiers = Set(),
     queries = Set(
-      request("counterValueReq") { (context: ComponentContext, counter: Int, req: CounterValueReq) =>
-        context.log("counterValueReq").info("Handling request")
+      request { ctx: ComponentContext => (counter: Int, req: CounterValueReq) =>
+        ctx.log.info("Handling request")
         CounterValueResp(req.id, counter)
-      }
+      }("counterValueReq")
     )
   )
 

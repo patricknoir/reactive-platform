@@ -32,7 +32,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
     case cmd: Command =>
       handleCommand(cmd, sender)
     case evt: Event =>
-      log.warning(s"Handling input events not implemented yet, received: $evt")
+      log.warning(s"Handling input event not implemented yet, received: $evt")
     case req: Request =>
       handleRequest(req, sender)
     case other => log.warning(s"Unhandled message: $other")
@@ -78,44 +78,36 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
   private def handleCommand(cmd: Command, origin: ActorRef) = {
     log.debug(s"Received command: $cmd")
     findServiceForCommand(cmd).map {
-      case ctxService: ContextStatefulService[T, Command, Seq[Event]] => handleCtxCommand(ctxService, cmd, origin)
+      case ctxService: ContextStatefulService[T, Command, Event] => handleCtxCommand(ctxService, cmd, origin)
     }.orElse {
       log.warning(s"Service not found for command: $cmd")
       None // FIXME: Need to reply in order to get the future completed
     }
   }
 
-  private def handleCtxCommand(css: ContextStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef): Try[Unit] = {
+  private def handleCtxCommand(css: ContextStatefulService[T, Command, Event], cmd: Command, origin: ActorRef): Try[Unit] = {
     Try {
       css.func(ctx, cmd)
     }.map { stateM =>
-      val (newModel, events) = stateM.run(this.model).value
-      log.info(s"about to persist: $events")
-      events.map { event =>
-        persist(event) { event =>
-          log.info("Event: {} persistend in the entity event-journal", event)
-          updateStateAndReply((newModel, events), origin)
-        }
-//          persist(EventRecover(newModel)) { er =>
-//            log.info(s"Internal state for entity: $persistenceId updated to: ${er.model}")
-//            updateStateAndReply((newModel, events), origin)
-//          }
-
+      val (newModel, event) = stateM.run(this.model).value
+      log.info(s"about to persist: $event")
+      persist(event) { e =>
+        log.info("Event: {} persisted in the entity event-journal", event)
+        updateStateAndReply((newModel, e), origin)
       }
-      () //FIXME - We should remove Seq[Evt] and go back to Evt
     }.recover { case err: Throwable =>
       reportErrorAndReply(err, cmd, origin)
     }
   }
 
-  private def handleSyncCommand(svc: SyncStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef) = {
+  private def handleSyncCommand(svc: SyncStatefulService[T, Command, Event], cmd: Command, origin: ActorRef) = {
     Try {
       svc.func(cmd)
     }.map { stateM =>
-        val (newModel, events) = stateM.run(model).value
+        val (newModel, event) = stateM.run(model).value
         persist(EventRecover(stateM)) { er =>
           log.info(s"Internal state for entity: $persistenceId updated to: $newModel")
-          updateStateAndReply((newModel, events), origin)
+          updateStateAndReply((newModel, event), origin)
         }
     }.recover { case err: Throwable =>
       reportErrorAndReply(err, cmd, origin)
@@ -123,7 +115,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
 
   }
 
-  private def handleAsyncCommand(svc: AsyncStatefulService[T, Command, Seq[Event]], cmd: Command, origin: ActorRef) = {
+  private def handleAsyncCommand(svc: AsyncStatefulService[T, Command, Event], cmd: Command, origin: ActorRef) = {
     log.debug(s"Service for command: $cmd found: ${svc.id}")
     implicit val ec = asyncCmdEc
     Future {
@@ -142,28 +134,28 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
     origin ! Status.Failure(err)
   }
 
-  private def updateStateAndReply(valueAndEvents: (T, Seq[Event]), origin: ActorRef) = {
-    log.info("Updating current state with: {}", valueAndEvents._1)
-    model = valueAndEvents._1
-    origin ! valueAndEvents._2
+  private def updateStateAndReply(valueAndEvent: (T, Event), origin: ActorRef) = {
+    log.info("Updating current state with: {}", valueAndEvent._1)
+    model = valueAndEvent._1
+    origin ! valueAndEvent._2
   }
 
   private def awaitingCommandComplete(cmd: Command, origin: ActorRef): Receive = {
     case newCmd: Command =>
       stash()
     case evt: Event =>
-      log.warning(s"Handling input events not implemented yet, received: $evt")
+      log.warning(s"Handling input event not implemented yet, received: $evt")
     case req: Request =>
       handleRequest(req, sender)
     case cc: CompleteCommand[T] =>
       if (cc.cmd == cmd) { // FIXME: Safer comparison ???
         cc.result.fold(
           err => reportErrorAndReply(err, cc.cmd, origin),
-          stateAndEvents => {
-            val (s, evts) = stateAndEvents
+          stateAndEvent => {
+            val (s, evts) = stateAndEvent
             val eventRecover = EventRecover[T](s)
             persist(eventRecover) { _ =>
-              updateStateAndReply(stateAndEvents, cc.origin)
+              updateStateAndReply(stateAndEvent, cc.origin)
               restoreBehaviour()
             }
           }
@@ -192,7 +184,7 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
 
 object ProcessorActor {
   def props(ctx: ComponentContext, processor: Processor[_])(implicit timeout: Timeout): Props = Props(new ProcessorActor(ctx, processor, timeout))
-  case class CompleteCommand[S](cmd: Command, result: Either[Throwable, (S, Seq[Event])], origin: ActorRef)
+  case class CompleteCommand[S](cmd: Command, result: Either[Throwable, (S, Event)], origin: ActorRef)
 
   case class EventRecover[S](model: S)
   case class WaitingComplete(cmd: Command, origin: ActorRef)

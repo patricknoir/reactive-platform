@@ -70,21 +70,21 @@ package object platform {
   )
 
 
-  type CmdInfo[S] = StatefulServiceInfo[S, Command, Seq[Event]]
-  type EvtInfo[S] = StatefulServiceInfo[S, Event, Seq[Event]]
+  type CmdInfo[S] = StatefulServiceInfo[S, Command, Event]
+  type EvtInfo[S] = StatefulServiceInfo[S, Event, Event]
   type AskInfo[S] = StatefulServiceInfo[S, Request, Response]
 
-  type Cmd[S] = StatefulService[S, Command, Seq[Event]]
-  type Evt[S] = StatefulService[S, Event, Seq[Event]]
+  type Cmd[S] = StatefulService[S, Command, Event]
+  type Evt[S] = StatefulService[S, Event, Event]
   type Ask[S] = StatefulService[S, Request, Response]
   type Recovery[S] = StatefulService[S, Event, Unit]
 
-  type CtxCmdInfo[S] = ContextStatefulServiceInfo[S, Command, Seq[Event]]
-  type CtxEvtInfo[S] = ContextStatefulServiceInfo[S, Event, Seq[Event]]
+  type CtxCmdInfo[S] = ContextStatefulServiceInfo[S, Command, Event]
+  type CtxEvtInfo[S] = ContextStatefulServiceInfo[S, Event, Event]
   type CtxAskInfo[S] = ContextStatefulServiceInfo[S, Request, Response]
 
-  type CtxCmd[S] = ContextStatefulService[S, Command, Seq[Event]]
-  type CtxEvt[S] = ContextStatefulService[S, Event, Seq[Event]]
+  type CtxCmd[S] = ContextStatefulService[S, Command, Event]
+  type CtxEvt[S] = ContextStatefulService[S, Event, Event]
   type CtxAsk[S] = ContextStatefulService[S, Request, Response]
 
 }
