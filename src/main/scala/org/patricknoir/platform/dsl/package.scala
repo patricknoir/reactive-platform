@@ -57,6 +57,16 @@ package object dsl {
     ContextStatefulServiceInfo[S, Command, Event](ContextStatefulService.async[S, Command, Event](id, fc), deserializer, serializer)
   }
 
+  def event[IE <: Event, OE <: Event, S](modifier: (S, IE) => Option[(S, OE)])(id: String)(implicit iect: ClassTag[IE], oect: ClassTag[OE], deserializer: ReactiveDeserializer[IE], serializer: ReactiveSerializer[Option[OE]]) = {
+    val fc: PartialFunction[(ComponentContext, Event), State[S, Option[Event]]] = {
+      case (ctx: ComponentContext, ie: IE) => State[S, Option[Event]] { init =>
+        modifier(init, ie).fold((init, Option.empty[OE])) { case (s: S, oe: OE) => (s, Option(oe))
+        }
+      }
+    }
+    ContextStatefulServiceInfo[S, Event, Option[Event]](ContextStatefulService.sync[S, Event, Option[Event]](id, fc), deserializer, serializer)
+  }
+
   def recovery[E <: Event, S](rec: (S, E) => S)(id: String)(implicit ect: ClassTag[E]): Recovery[S] = {
     val pf: PartialFunction[Event, State[S, Unit]] = {
       case event: E => State(init => (rec(init, event), ()))

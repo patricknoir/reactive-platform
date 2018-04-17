@@ -71,7 +71,7 @@ package object platform {
 
 
   type CmdInfo[S] = StatefulServiceInfo[S, Command, Event]
-  type EvtInfo[S] = StatefulServiceInfo[S, Event, Event]
+  type EvtInfo[S] = StatefulServiceInfo[S, Event, Option[Event]]
   type AskInfo[S] = StatefulServiceInfo[S, Request, Response]
 
   type Cmd[S] = StatefulService[S, Command, Event]
