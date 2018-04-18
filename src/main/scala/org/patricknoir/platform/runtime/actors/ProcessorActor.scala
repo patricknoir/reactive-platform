@@ -100,6 +100,23 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
     }
   }
 
+  private def handleEvent(evt: Event, origin: ActorRef) = Try {
+    log.debug("Received event: {}", evt)
+    findServiceForEvent(evt).map { service =>
+      val (newModel, optEvt) = service.func(ctx, evt).run(model).value
+      optEvt.fold{
+        //TODO: nothing to do must commit the event
+      } { oe =>
+        persist(oe) { event =>
+          log.info("Event: {} persisted in the entity event-journal", event)
+          updateStateAndReply((newModel, event), origin)
+        }
+      }
+    }
+  }.recover { case err: Throwable =>
+    reportErrorAndReply(err, evt, origin)
+  }
+
   private def handleSyncCommand(svc: SyncStatefulService[T, Command, Event], cmd: Command, origin: ActorRef) = {
     Try {
       svc.func(cmd)
@@ -131,6 +148,11 @@ class ProcessorActor[T](ctx: ComponentContext, processor: Processor[T], timeout:
 
   private def reportErrorAndReply(err: Throwable, cmd: Command, origin: ActorRef) = {
     log.error(err, s"Error processing command: ${cmd}")
+    origin ! Status.Failure(err)
+  }
+
+  private def reportErrorAndReply(err: Throwable, evt: Event, origin: ActorRef) = {
+    log.error(err, s"Error processing event: ${evt}")
     origin ! Status.Failure(err)
   }
 

@@ -80,7 +80,7 @@ package object platform {
   type Recovery[S] = StatefulService[S, Event, Unit]
 
   type CtxCmdInfo[S] = ContextStatefulServiceInfo[S, Command, Event]
-  type CtxEvtInfo[S] = ContextStatefulServiceInfo[S, Event, Event]
+  type CtxEvtInfo[S] = ContextStatefulServiceInfo[S, Event, Option[Event]]
   type CtxAskInfo[S] = ContextStatefulServiceInfo[S, Request, Response]
 
   type CtxCmd[S] = ContextStatefulService[S, Command, Event]
